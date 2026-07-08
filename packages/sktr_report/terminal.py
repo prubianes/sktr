@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sktr_core.model import ReviewResult
+from sktr_core.model import Issue, IssueCategory, ReviewResult
 
 
 class TerminalReporter:
@@ -16,6 +16,19 @@ class TerminalReporter:
         if not result.context.file_changes:
             lines.append(f"Status: {result.status}")
 
+        architecture_issues = [issue for issue in result.issues if issue.category == IssueCategory.ARCHITECTURE]
+        other_issues = [issue for issue in result.issues if issue.category != IssueCategory.ARCHITECTURE]
+
+        if architecture_issues:
+            lines.append("")
+            lines.append("[bold]Architecture[/bold]")
+            lines.extend(self._issue_lines(architecture_issues))
+
+        if other_issues:
+            lines.append("")
+            lines.append("[bold]Findings[/bold]")
+            lines.extend(self._issue_lines(other_issues))
+
         lines.extend(result.messages)
         return "\n".join(lines)
 
@@ -26,3 +39,9 @@ class TerminalReporter:
             "deleted": "D",
             "renamed": "R",
         }.get(status, "?")
+
+    def _issue_lines(self, issues: list[Issue]) -> list[str]:
+        lines: list[str] = []
+        for issue in issues:
+            lines.append(f"[yellow]⚠[/yellow] {issue.description}")
+        return lines

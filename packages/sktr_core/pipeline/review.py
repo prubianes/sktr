@@ -46,7 +46,7 @@ class ReviewPipeline:
             messages.append("No rules configured yet.")
         else:
             for rule in self.rules:
-                issues.extend(rule.evaluate(system))
+                issues.extend(rule.evaluate(system, context))
 
         ai_review: AIReview | None = None
         if self.ai_provider is None:

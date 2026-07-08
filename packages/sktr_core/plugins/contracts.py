@@ -41,7 +41,7 @@ class Rule(Protocol):
     id: str
     name: str
 
-    def evaluate(self, system: System) -> list[Issue]: ...
+    def evaluate(self, system: System, context: ReviewContext) -> list[Issue]: ...
 
 
 class AIProvider(Protocol):
