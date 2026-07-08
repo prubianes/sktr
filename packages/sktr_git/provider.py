@@ -24,6 +24,7 @@ class SubprocessGitProvider:
 
         return GitDiff(
             raw=raw,
+            repository_root=str(repository_root),
             changed_files=[change.path for change in file_changes],
             file_changes=file_changes,
         )

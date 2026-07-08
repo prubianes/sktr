@@ -9,6 +9,7 @@ from sktr_core.model import AIReview, FileChange, Issue, ReviewContext, ReviewRe
 
 class GitDiff(BaseModel):
     raw: str = ""
+    repository_root: str | None = None
     changed_files: list[str] = Field(default_factory=list)
     file_changes: list[FileChange] = Field(default_factory=list)
 
