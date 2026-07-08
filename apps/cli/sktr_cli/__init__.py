@@ -1,0 +1,1 @@
+"""SKTR CLI application package."""
