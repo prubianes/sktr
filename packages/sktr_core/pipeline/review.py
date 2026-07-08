@@ -24,9 +24,10 @@ class ReviewPipeline:
 
     def run(self) -> ReviewResult:
         diff = self.git_provider.current_diff() if self.git_provider else GitDiff()
-        changed_files = self.git_provider.changed_files() if self.git_provider else []
+        changed_files = diff.changed_files
         context = ReviewContext(
             changed_files=changed_files,
+            file_changes=diff.file_changes,
             diff_summary=diff.raw if diff.raw else None,
         )
 

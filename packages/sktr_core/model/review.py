@@ -6,6 +6,14 @@ from sktr_core.model.enums import IssueCategory, IssueSeverity
 from sktr_core.model.knowledge import Location, System
 
 
+class FileChange(BaseModel):
+    path: str
+    status: str
+    added_lines: int = 0
+    removed_lines: int = 0
+    old_path: str | None = None
+
+
 class Issue(BaseModel):
     id: str
     title: str
@@ -19,6 +27,7 @@ class Issue(BaseModel):
 
 class ReviewContext(BaseModel):
     changed_files: list[str] = Field(default_factory=list)
+    file_changes: list[FileChange] = Field(default_factory=list)
     diff_summary: str | None = None
     metadata: dict[str, str] = Field(default_factory=dict)
 

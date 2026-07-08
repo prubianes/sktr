@@ -4,12 +4,13 @@ from typing import Protocol
 
 from pydantic import BaseModel, Field
 
-from sktr_core.model import AIReview, Issue, ReviewContext, ReviewResult, System
+from sktr_core.model import AIReview, FileChange, Issue, ReviewContext, ReviewResult, System
 
 
 class GitDiff(BaseModel):
     raw: str = ""
     changed_files: list[str] = Field(default_factory=list)
+    file_changes: list[FileChange] = Field(default_factory=list)
 
 
 class AnalysisContext(BaseModel):
