@@ -8,13 +8,16 @@ from sktr_core.config import load_config
 from sktr_core.model import ReviewResult
 from sktr_core.pipeline import ReviewPipeline
 from sktr_core.plugins import MissingPluginError, PluginRegistry
+from sktr_ai import resolve_openai_api_key
 from sktr_enrichment import KnowledgeEnrichmentEngine
 from sktr_graph import GraphBuilder, GraphLevel
 from sktr_git import ReviewScope, SubprocessGitProvider
 
 app = typer.Typer(help="System Knowledge & Technical Review.")
 plugins_app = typer.Typer(help="Inspect SKTR plugins.")
+ai_app = typer.Typer(help="Inspect configured AI providers.")
 app.add_typer(plugins_app, name="plugins")
+app.add_typer(ai_app, name="ai")
 
 DEFAULT_CONFIG = """project:
   name: sample-app
@@ -34,6 +37,7 @@ plugins:
 ai:
   enabled: false
   provider: null
+  model: null
 """
 
 DEFAULT_OUTPUTS = ["terminal", "markdown", "json", "mermaid"]
@@ -61,6 +65,9 @@ def init(
     project_name = "sample-app"
     default_base = "main"
     outputs = DEFAULT_OUTPUTS
+    ai_enabled = False
+    ai_provider: str | None = None
+    ai_model: str | None = None
 
     if yes:
         _print_default_choices()
@@ -75,10 +82,19 @@ def init(
             default_base = typer.prompt("Default base branch", default=default_base)
             outputs = _prompt_outputs(DEFAULT_OUTPUTS)
 
-    content = _render_config(project_name=project_name, default_base=default_base, outputs=outputs)
+        ai_enabled, ai_provider, ai_model = _prompt_ai_configuration()
+
+    content = _render_config(
+        project_name=project_name,
+        default_base=default_base,
+        outputs=outputs,
+        ai_enabled=ai_enabled,
+        ai_provider=ai_provider,
+        ai_model=ai_model,
+    )
 
     config_path.write_text(content, encoding="utf-8")
-    _print_init_success(config_path, outputs=outputs)
+    _print_init_success(config_path, outputs=outputs, ai_provider=ai_provider, ai_model=ai_model)
 
 
 @app.command()
@@ -195,6 +211,27 @@ def plugins_doctor() -> None:
     typer.echo("✓ Plugin configuration is valid.")
 
 
+@ai_app.command("doctor")
+def ai_doctor() -> None:
+    """Report AI provider readiness without revealing credentials."""
+    config = _require_config()
+    provider = config.ai.provider
+    if not config.ai.enabled or provider is None:
+        typer.echo("AI provider: not configured")
+        return
+
+    typer.echo(f"AI provider: {provider}")
+    if provider not in {"openai", "sktr-openai"}:
+        typer.echo("API key: not checked for this provider")
+        return
+
+    resolution = resolve_openai_api_key()
+    if resolution.source is None:
+        typer.echo("API key: missing")
+    else:
+        typer.echo(f"API key: found via {resolution.source}")
+
+
 def _review_scope(*, branch: bool, base: str | None, commit: str | None) -> ReviewScope:
     if commit is not None and (branch or base is not None):
         raise typer.BadParameter("--commit cannot be combined with --branch or --base")
@@ -223,6 +260,11 @@ def _build_review_result(
         for name in config.plugins.rules
         for rule in plugin_registry.require("rules", name).plugin.create_rules(config.rules)
     ]
+    ai_provider = None
+    if config.ai.enabled and config.ai.provider:
+        ai_provider = plugin_registry.require("ai_provider", config.ai.provider).plugin.create_ai_provider(
+            model=config.ai.model
+        )
     git_diff = SubprocessGitProvider(
         scope=scope,
         base_branch=base_branch,
@@ -233,6 +275,7 @@ def _build_review_result(
         analyzers=analyzers,
         enrichment_engine=KnowledgeEnrichmentEngine.default(),
         rules=rules,
+        ai_provider=ai_provider,
     )
     return pipeline.run()
 
@@ -280,21 +323,40 @@ def _print_default_choices() -> None:
     typer.echo("Default base: main")
     typer.echo("Plugins: sktr-python, sktr-rules-default")
     typer.echo("Outputs: terminal, markdown, json, mermaid")
+    typer.echo("AI summaries: disabled")
     typer.echo()
 
 
-def _print_init_success(config_path: Path, *, outputs: list[str]) -> None:
+def _print_init_success(
+    config_path: Path,
+    *,
+    outputs: list[str],
+    ai_provider: str | None,
+    ai_model: str | None,
+) -> None:
     typer.secho(f"✓ Created {config_path}", fg=typer.colors.GREEN, bold=True)
     typer.echo()
     typer.echo("Enabled:")
     typer.echo("  analyzers: sktr-python")
     typer.echo("  rules:     sktr-rules-default")
     typer.echo(f"  outputs:   {', '.join(outputs)}")
+    ai_label = f"{ai_provider} ({ai_model})" if ai_provider and ai_model else ai_provider or "disabled"
+    typer.echo(f"  AI:        {ai_label}")
     typer.echo()
     typer.echo("Next steps:")
     typer.echo("  sktr plugins doctor")
     typer.echo("  sktr review")
     typer.echo("  sktr review --format markdown --output REVIEW.md")
+
+
+def _prompt_ai_configuration() -> tuple[bool, str | None, str | None]:
+    if not typer.confirm("Enable AI summaries?", default=False):
+        return False, None, None
+
+    typer.secho("API keys stay in your environment and are never written to sktr.yml.", fg=typer.colors.CYAN)
+    provider = typer.prompt("AI provider", default="openai")
+    model = typer.prompt("AI model", default="gpt-5-mini")
+    return True, provider, model
 
 
 def _prompt_outputs(defaults: list[str]) -> list[str]:
@@ -308,7 +370,15 @@ def _prompt_outputs(defaults: list[str]) -> list[str]:
     return outputs
 
 
-def _render_config(*, project_name: str, default_base: str, outputs: list[str]) -> str:
+def _render_config(
+    *,
+    project_name: str,
+    default_base: str,
+    outputs: list[str],
+    ai_enabled: bool,
+    ai_provider: str | None,
+    ai_model: str | None,
+) -> str:
     output_lines = "\n".join(f"    - {output}" for output in outputs)
     return f"""project:
   name: {project_name}
@@ -323,6 +393,7 @@ plugins:
   outputs:
 {output_lines}
 ai:
-  enabled: false
-  provider: null
+  enabled: {str(ai_enabled).lower()}
+  provider: {ai_provider or 'null'}
+  model: {ai_model or 'null'}
 """

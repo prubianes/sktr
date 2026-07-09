@@ -35,6 +35,7 @@ class ReviewContext(BaseModel):
 class AIReview(BaseModel):
     summary: str | None = None
     recommendations: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
     model: str | None = None
     metadata: dict[str, str] = Field(default_factory=dict)
 

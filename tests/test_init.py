@@ -56,11 +56,12 @@ def test_init_yes_does_not_prompt() -> None:
 
 def test_init_recommended_defaults_prompt() -> None:
     with _isolated(Path.cwd() / ".tmp-init-test-5"):
-        result = runner.invoke(app, ["init"], input="\n")
+        result = runner.invoke(app, ["init"], input="\n\n")
 
         assert result.exit_code == 0
         assert "Would you like to use the recommended SKTR defaults?" in result.output
         assert "✓ Using recommended defaults" in result.output
+        assert "Enable AI summaries?" in result.output
         assert "name: sample-app" in Path("sktr.yml").read_text(encoding="utf-8")
 
 
@@ -78,6 +79,9 @@ def test_init_customize_settings() -> None:
                     "y",
                     "n",
                     "n",
+                    "y",
+                    "openai",
+                    "gpt-5-mini",
                 ]
             )
             + "\n",
@@ -91,6 +95,19 @@ def test_init_customize_settings() -> None:
         assert "    - markdown" in config
         assert "    - json" not in config
         assert "    - mermaid" not in config
+        assert "enabled: true" in config
+        assert "provider: openai" in config
+        assert "model: gpt-5-mini" in config
+
+
+def test_init_can_leave_ai_disabled_interactively() -> None:
+    with _isolated(Path.cwd() / ".tmp-init-test-7"):
+        result = runner.invoke(app, ["init"], input="\n\n")
+
+        assert result.exit_code == 0
+        config = Path("sktr.yml").read_text(encoding="utf-8")
+        assert "enabled: false" in config
+        assert "provider: null" in config
 
 
 class _isolated:

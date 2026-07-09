@@ -36,6 +36,7 @@ class PluginsConfig(BaseModel):
 class AIConfig(BaseModel):
     enabled: bool = False
     provider: str | None = None
+    model: str | None = None
 
 
 class ForbiddenDependency(BaseModel):
