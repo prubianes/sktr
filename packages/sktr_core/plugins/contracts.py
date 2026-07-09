@@ -49,5 +49,7 @@ class AIProvider(Protocol):
     def review(self, context: AIReviewContext) -> AIReview: ...
 
 
-class Reporter(Protocol):
-    def render(self, result: ReviewResult) -> str: ...
+class Output(Protocol):
+    format: str
+
+    def write(self, result: ReviewResult, destination: str | None = None) -> None: ...

@@ -8,8 +8,8 @@ The first product goal is a Python CLI command:
 sktr review
 ```
 
-This foundation milestone provides the language-agnostic core model, plugin contracts,
-a skeletal review pipeline, a placeholder terminal reporter, and tests.
+SKTR provides a language-agnostic core model, plugin contracts, deterministic rules,
+review scopes, and pluggable outputs.
 
 ## Configuration
 
@@ -60,4 +60,31 @@ Review one commit against its parent:
 
 ```bash
 sktr review --commit HEAD~1
+```
+
+## Outputs
+
+Write terminal output to stdout:
+
+```bash
+sktr review --format terminal
+```
+
+Write JSON to stdout:
+
+```bash
+sktr review --format json
+```
+
+Write Markdown to stdout:
+
+```bash
+sktr review --format markdown
+```
+
+Write JSON or Markdown to a file:
+
+```bash
+sktr review --format json --output sktr-review.json
+sktr review --format markdown --output REVIEW.md
 ```

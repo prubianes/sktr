@@ -3,13 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
-from rich.console import Console
 
 from sktr_core.config import load_config
 from sktr_core.pipeline import ReviewPipeline
 from sktr_git import ReviewScope, SubprocessGitProvider
 from sktr_python import PythonAstAnalyzer
-from sktr_report import TerminalReporter, write_review_artifact
+from sktr_report import output_for_format
 from sktr_rules import RuleRegistry, rules_from_config
 
 app = typer.Typer(help="System Knowledge & Technical Review.")
@@ -26,7 +25,12 @@ def review(
         None,
         "--output",
         "-o",
-        help="Write the structured review artifact to a JSON file.",
+        help="Write output to a file instead of stdout.",
+    ),
+    output_format: str = typer.Option(
+        "terminal",
+        "--format",
+        help="Output format: terminal, json, or markdown.",
     ),
     branch: bool = typer.Option(
         False,
@@ -60,10 +64,11 @@ def review(
         rules=rule_registry.all(),
     )
     result = pipeline.run()
-    if output is not None:
-        write_review_artifact(result, output)
-    report = TerminalReporter().render(result)
-    Console().print(report)
+    try:
+        selected_output = output_for_format(output_format)
+    except ValueError as error:
+        raise typer.BadParameter(str(error), param_hint="--format") from error
+    selected_output.write(result, str(output) if output is not None else None)
 
 
 def _review_scope(*, branch: bool, base: str | None, commit: str | None) -> ReviewScope:

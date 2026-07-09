@@ -5,7 +5,7 @@ from sktr_core.plugins.contracts import (
     Analyzer,
     GitDiff,
     GitProvider,
-    Reporter,
+    Output,
     Rule,
 )
 
@@ -16,6 +16,6 @@ __all__ = [
     "Analyzer",
     "GitDiff",
     "GitProvider",
-    "Reporter",
+    "Output",
     "Rule",
 ]
