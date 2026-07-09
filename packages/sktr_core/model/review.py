@@ -46,4 +46,4 @@ class ReviewResult(BaseModel):
     issues: list[Issue] = Field(default_factory=list)
     ai_review: AIReview | None = None
     messages: list[str] = Field(default_factory=list)
-    metadata: dict[str, str] = Field(default_factory=dict)
+    metadata: dict[str, object] = Field(default_factory=dict)

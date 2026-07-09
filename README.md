@@ -88,3 +88,22 @@ Write JSON or Markdown to a file:
 sktr review --format json --output sktr-review.json
 sktr review --format markdown --output REVIEW.md
 ```
+
+JSON output is the canonical SKTR analysis artifact. It includes schema version,
+metadata, repository info, summary score/risk, changed files, knowledge model
+summary, issues, executed rules, and backward-compatible review fields.
+
+Markdown output is a deterministic review document with a summary, risk score,
+changed-file table, grouped issues, architecture and maintainability findings,
+suggestions, and metadata.
+
+## Graphs
+
+Generate a Mermaid dependency graph from the SKTR knowledge model:
+
+```bash
+sktr graph
+sktr graph --level module
+sktr graph --level file
+sktr graph --format mermaid --output architecture.mmd
+```

@@ -5,21 +5,38 @@ from pathlib import Path
 from typing import Any
 
 from sktr_core.model import ReviewResult, SourceFile
+from sktr_report.summary import risk_level, risk_score
 
 
 def review_result_to_artifact(result: ReviewResult) -> dict[str, Any]:
+    score = risk_score(result)
+    risk = risk_level(score)
+    knowledge_summary = _knowledge_model_summary(result)
+    rules = _rules(result)
     return {
         "schema_version": "0.1",
-        "status": result.status,
-        "changed_files": [change.model_dump(mode="json") for change in result.context.file_changes],
-        "knowledge_model_summary": _knowledge_model_summary(result),
-        "issues": [issue.model_dump(mode="json") for issue in result.issues],
-        "rule_results": _rule_results(result),
         "metadata": {
+            "tool": "sktr",
+            "generated_at": str(result.metadata.get("generated_at", "unknown")),
             "review": result.metadata,
             "context": result.context.metadata,
             "system": result.system.metadata,
         },
+        "repository": _repository(result),
+        "summary": {
+            "score": score,
+            "risk": risk,
+            "changed_files": len(result.context.file_changes),
+            "issues": len(result.issues),
+        },
+        "status": result.status,
+        "changed_files": [change.model_dump(mode="json") for change in result.context.file_changes],
+        "knowledge_model_summary": knowledge_summary,
+        "issues": [issue.model_dump(mode="json") for issue in result.issues],
+        "rules": rules,
+        "rule_results": _rule_results(result),
+        "score": score,
+        "risk": risk,
         "review_result": result.model_dump(mode="json"),
     }
 
@@ -56,6 +73,41 @@ def _rule_results(result: ReviewResult) -> list[dict[str, Any]]:
             "issue_ids": issue_ids,
         }
         for rule_id, issue_ids in sorted(grouped.items())
+    ]
+
+
+def _repository(result: ReviewResult) -> dict[str, str | None]:
+    root_path = result.context.metadata.get("repository_root")
+    if not root_path:
+        root_path = result.context.metadata.get("root_path")
+
+    name = result.context.metadata.get("repository_name")
+    if not name and isinstance(root_path, str):
+        name = Path(root_path).name
+    if not name:
+        name = result.system.name if result.system.name != "current" else None
+
+    return {
+        "name": str(name) if name else None,
+        "root_path": str(root_path) if root_path else None,
+    }
+
+
+def _rules(result: ReviewResult) -> list[dict[str, Any]]:
+    rules_executed = result.metadata.get("rules_executed", [])
+    if isinstance(rules_executed, list) and rules_executed:
+        return [
+            rule
+            for rule in rules_executed
+            if isinstance(rule, dict)
+        ]
+
+    return [
+        {
+            "id": rule_result["rule_id"],
+            "issue_count": rule_result["issue_count"],
+        }
+        for rule_result in _rule_results(result)
     ]
 
 

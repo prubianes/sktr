@@ -120,6 +120,9 @@ class LargeFunctionDetectedRule:
                             "symbol_kind": symbol.kind.value,
                             "line_count": str(line_count),
                             "max_lines": str(self.threshold),
+                            "suggestion": (
+                                "Consider extracting validation, orchestration, and persistence into smaller functions."
+                            ),
                         },
                     )
                 )

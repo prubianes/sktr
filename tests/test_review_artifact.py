@@ -28,6 +28,15 @@ def test_review_result_serializes_to_json_artifact() -> None:
     artifact = json.loads(review_result_to_json(result))
 
     assert artifact["schema_version"] == "0.1"
+    assert artifact["metadata"]["tool"] == "sktr"
+    assert artifact["metadata"]["generated_at"] == "unknown"
+    assert artifact["repository"] == {"name": None, "root_path": None}
+    assert artifact["summary"] == {
+        "score": 75,
+        "risk": "medium",
+        "changed_files": 1,
+        "issues": 1,
+    }
     assert artifact["changed_files"] == [
         {
             "path": "controllers/order_controller.py",
@@ -52,6 +61,14 @@ def test_review_result_serializes_to_json_artifact() -> None:
             "issue_ids": ["architecture.forbidden_dependency:controllers/order_controller.py"],
         }
     ]
+    assert artifact["rules"] == [
+        {
+            "id": "architecture.forbidden_dependency",
+            "issue_count": 1,
+        }
+    ]
+    assert artifact["score"] == 75
+    assert artifact["risk"] == "medium"
     assert artifact["metadata"]["review"] == {"run_id": "test-run"}
     assert artifact["review_result"]["status"] == "foundation ready"
 

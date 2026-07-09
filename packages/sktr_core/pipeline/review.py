@@ -31,6 +31,10 @@ class ReviewPipeline:
             changed_files=changed_files,
             file_changes=diff.file_changes,
             diff_summary=diff.raw if diff.raw else None,
+            metadata={
+                **diff.metadata,
+                **({"repository_root": diff.repository_root} if diff.repository_root else {}),
+            },
         )
 
         system = System()
@@ -44,10 +48,17 @@ class ReviewPipeline:
             system = self._merge_systems(systems)
 
         issues = []
+        rules_executed = []
         if not self.rules:
             messages.append("No rules configured yet.")
         else:
             for rule in self.rules:
+                rules_executed.append(
+                    {
+                        "id": rule.id,
+                        "name": rule.name,
+                    }
+                )
                 issues.extend(rule.evaluate(system, context))
 
         ai_review: AIReview | None = None
@@ -64,6 +75,7 @@ class ReviewPipeline:
             issues=issues,
             ai_review=ai_review,
             messages=messages,
+            metadata={"rules_executed": rules_executed},
         )
 
     def _merge_systems(self, systems: Sequence[System]) -> System:
