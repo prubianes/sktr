@@ -8,6 +8,7 @@ from sktr_core.config import load_config
 from sktr_core.model import ReviewResult
 from sktr_core.pipeline import ReviewPipeline
 from sktr_core.plugins import MissingPluginError, PluginRegistry
+from sktr_enrichment import KnowledgeEnrichmentEngine
 from sktr_graph import GraphBuilder, GraphLevel
 from sktr_git import ReviewScope, SubprocessGitProvider
 
@@ -230,6 +231,7 @@ def _build_review_result(
     pipeline = ReviewPipeline(
         diff=git_diff,
         analyzers=analyzers,
+        enrichment_engine=KnowledgeEnrichmentEngine.default(),
         rules=rules,
     )
     return pipeline.run()

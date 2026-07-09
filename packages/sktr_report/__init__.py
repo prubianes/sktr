@@ -7,7 +7,7 @@ class TerminalOutputPlugin:
     def metadata(self) -> PluginMetadata:
         return PluginMetadata(
             name="terminal",
-            version="0.10.0",
+            version="0.11.0",
             type="output",
             description="Terminal review output.",
         )
@@ -20,7 +20,7 @@ class MarkdownOutputPlugin:
     def metadata(self) -> PluginMetadata:
         return PluginMetadata(
             name="markdown",
-            version="0.10.0",
+            version="0.11.0",
             type="output",
             description="Markdown review document output.",
         )
@@ -33,7 +33,7 @@ class JsonOutputPlugin:
     def metadata(self) -> PluginMetadata:
         return PluginMetadata(
             name="json",
-            version="0.10.0",
+            version="0.11.0",
             type="output",
             description="Canonical JSON review artifact output.",
         )

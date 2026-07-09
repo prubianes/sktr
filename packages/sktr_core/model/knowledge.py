@@ -17,7 +17,7 @@ class Symbol(BaseModel):
     name: str
     kind: SymbolKind = SymbolKind.UNKNOWN
     location: Location | None = None
-    metadata: dict[str, str] = Field(default_factory=dict)
+    metadata: dict[str, object] = Field(default_factory=dict)
 
 
 class Dependency(BaseModel):
@@ -25,7 +25,7 @@ class Dependency(BaseModel):
     target: str
     kind: DependencyKind = DependencyKind.UNKNOWN
     location: Location | None = None
-    metadata: dict[str, str] = Field(default_factory=dict)
+    metadata: dict[str, object] = Field(default_factory=dict)
 
 
 class SourceFile(BaseModel):
@@ -33,17 +33,17 @@ class SourceFile(BaseModel):
     language: str | None = None
     symbols: list[Symbol] = Field(default_factory=list)
     dependencies: list[Dependency] = Field(default_factory=list)
-    metadata: dict[str, str] = Field(default_factory=dict)
+    metadata: dict[str, object] = Field(default_factory=dict)
 
 
 class Module(BaseModel):
     name: str
     path: str | None = None
     files: list[SourceFile] = Field(default_factory=list)
-    metadata: dict[str, str] = Field(default_factory=dict)
+    metadata: dict[str, object] = Field(default_factory=dict)
 
 
 class System(BaseModel):
     name: str = "current"
     modules: list[Module] = Field(default_factory=list)
-    metadata: dict[str, str] = Field(default_factory=dict)
+    metadata: dict[str, object] = Field(default_factory=dict)

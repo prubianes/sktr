@@ -30,6 +30,9 @@ class NewDependencyDetectedRule:
             for dependency in source_file.dependencies:
                 if dependency.kind != DependencyKind.IMPORT:
                     continue
+                metrics = _metadata_dict(dependency.metadata.get("metrics"))
+                if metrics and not metrics.get("new_dependency", False):
+                    continue
                 issues.append(
                     Issue(
                         id=f"{self.id}:{dependency.source}:{dependency.target}",
@@ -60,8 +63,10 @@ class LargeFileChangedRule:
 
     def evaluate(self, system: System, context: ReviewContext) -> list[Issue]:
         issues: list[Issue] = []
+        files_by_path = {source_file.path: source_file for source_file in _source_files(system)}
         for change in context.file_changes:
-            changed_lines = change.added_lines + change.removed_lines
+            metrics = _metadata_dict(files_by_path.get(change.path).metadata.get("metrics")) if change.path in files_by_path else {}
+            changed_lines = int(metrics.get("total_changed_lines", change.added_lines + change.removed_lines))
             if changed_lines < self.threshold:
                 continue
             issues.append(
@@ -100,7 +105,9 @@ class LargeFunctionDetectedRule:
             for symbol in source_file.symbols:
                 if symbol.kind not in {SymbolKind.FUNCTION, SymbolKind.METHOD}:
                     continue
-                line_count = _line_count(symbol)
+                metrics = _metadata_dict(symbol.metadata.get("metrics"))
+                line_count = int(metrics.get("estimated_size", _line_count(symbol) or 0))
+                change_status = str(metrics.get("change_status", source_file.metadata.get("change_status", "unknown")))
                 if line_count is None or line_count < self.threshold:
                     continue
                 issues.append(
@@ -119,6 +126,7 @@ class LargeFunctionDetectedRule:
                             "symbol": symbol.name,
                             "symbol_kind": symbol.kind.value,
                             "line_count": str(line_count),
+                            "change_status": change_status,
                             "max_lines": str(self.threshold),
                             "suggestion": (
                                 "Consider extracting validation, orchestration, and persistence into smaller functions."
@@ -227,3 +235,7 @@ def _target_path(target: str) -> str:
     if target.endswith(".py"):
         return target
     return target.replace(".", "/") + ".py"
+
+
+def _metadata_dict(value: object) -> dict[str, object]:
+    return value if isinstance(value, dict) else {}

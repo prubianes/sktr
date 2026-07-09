@@ -8,7 +8,7 @@ class MermaidOutputPlugin:
     def metadata(self) -> PluginMetadata:
         return PluginMetadata(
             name="mermaid",
-            version="0.10.0",
+            version="0.11.0",
             type="output",
             description="Mermaid dependency graph output.",
         )

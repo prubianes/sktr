@@ -31,6 +31,7 @@ def review_result_to_artifact(result: ReviewResult) -> dict[str, Any]:
         },
         "status": result.status,
         "changed_files": [change.model_dump(mode="json") for change in result.context.file_changes],
+        "knowledge_summary": result.knowledge_summary,
         "knowledge_model_summary": knowledge_summary,
         "issues": [issue.model_dump(mode="json") for issue in result.issues],
         "rules": rules,

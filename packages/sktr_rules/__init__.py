@@ -15,7 +15,7 @@ class DefaultRulesPlugin:
     def metadata(self) -> PluginMetadata:
         return PluginMetadata(
             name="sktr-rules-default",
-            version="0.10.0",
+            version="0.11.0",
             type="rules",
             description="Default deterministic SKTR rules.",
         )

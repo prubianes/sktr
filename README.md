@@ -8,8 +8,8 @@ The first product goal is a Python CLI command:
 sktr review
 ```
 
-SKTR provides a language-agnostic core model, plugin contracts, deterministic rules,
-review scopes, and pluggable outputs.
+SKTR provides a language-agnostic core model, plugin contracts, deterministic
+knowledge enrichment, deterministic rules, review scopes, and pluggable outputs.
 
 ## Configuration
 
@@ -114,6 +114,19 @@ summary, issues, executed rules, and backward-compatible review fields.
 Markdown output is a deterministic review document with a summary, risk score,
 changed-file table, grouped issues, architecture and maintainability findings,
 suggestions, and metadata.
+
+## Knowledge Enrichment
+
+Before rules run, SKTR enriches the Knowledge Model with deterministic engineering
+metadata:
+
+- file, symbol, dependency, and module metrics
+- risk indicators
+- review priority
+- knowledge summary
+
+Rules and future AI providers consume this enriched model instead of raw parser
+data.
 
 ## Graphs
 

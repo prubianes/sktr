@@ -6,7 +6,7 @@ class PythonAnalyzerPlugin:
     def metadata(self) -> PluginMetadata:
         return PluginMetadata(
             name="sktr-python",
-            version="0.10.0",
+            version="0.11.0",
             type="analyzer",
             description="Python analyzer using the standard ast module.",
         )

@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Protocol
 
 from sktr_core.model import AIReview, ReviewContext, ReviewResult, System
 from sktr_core.plugins import AIProvider, AIReviewContext, AnalysisContext, Analyzer, GitDiff, GitProvider, Rule
+
+
+class EnrichmentEngine(Protocol):
+    def enrich(self, system: System, diff: GitDiff) -> System: ...
 
 
 class ReviewPipeline:
@@ -15,12 +20,14 @@ class ReviewPipeline:
         diff: GitDiff | None = None,
         git_provider: GitProvider | None = None,
         analyzers: Sequence[Analyzer] | None = None,
+        enrichment_engine: EnrichmentEngine | None = None,
         rules: Sequence[Rule] | None = None,
         ai_provider: AIProvider | None = None,
     ) -> None:
         self.diff = diff
         self.git_provider = git_provider
         self.analyzers = list(analyzers or [])
+        self.enrichment_engine = enrichment_engine
         self.rules = list(rules or [])
         self.ai_provider = ai_provider
 
@@ -46,6 +53,9 @@ class ReviewPipeline:
             analysis_context = AnalysisContext(review=context, diff=diff)
             systems = [analyzer.analyze(analysis_context) for analyzer in self.analyzers]
             system = self._merge_systems(systems)
+
+        if self.enrichment_engine is not None:
+            system = self.enrichment_engine.enrich(system, diff)
 
         issues = []
         rules_executed = []
@@ -74,6 +84,7 @@ class ReviewPipeline:
             system=system,
             issues=issues,
             ai_review=ai_review,
+            knowledge_summary=_knowledge_summary(system),
             messages=messages,
             metadata={"rules_executed": rules_executed},
         )
@@ -84,3 +95,10 @@ class ReviewPipeline:
             merged.modules.extend(system.modules)
             merged.metadata.update(system.metadata)
         return merged
+
+
+def _knowledge_summary(system: System) -> dict[str, int]:
+    value = system.metadata.get("knowledge_summary", {})
+    if not isinstance(value, dict):
+        return {}
+    return {str(key): int(metric) for key, metric in value.items() if isinstance(metric, int)}
