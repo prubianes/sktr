@@ -12,18 +12,20 @@ class ReviewPipeline:
     def __init__(
         self,
         *,
+        diff: GitDiff | None = None,
         git_provider: GitProvider | None = None,
         analyzers: Sequence[Analyzer] | None = None,
         rules: Sequence[Rule] | None = None,
         ai_provider: AIProvider | None = None,
     ) -> None:
+        self.diff = diff
         self.git_provider = git_provider
         self.analyzers = list(analyzers or [])
         self.rules = list(rules or [])
         self.ai_provider = ai_provider
 
     def run(self) -> ReviewResult:
-        diff = self.git_provider.current_diff() if self.git_provider else GitDiff()
+        diff = self.diff or (self.git_provider.current_diff() if self.git_provider else GitDiff())
         changed_files = diff.changed_files
         context = ReviewContext(
             changed_files=changed_files,

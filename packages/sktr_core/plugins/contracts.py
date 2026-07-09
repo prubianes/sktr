@@ -12,6 +12,7 @@ class GitDiff(BaseModel):
     repository_root: str | None = None
     changed_files: list[str] = Field(default_factory=list)
     file_changes: list[FileChange] = Field(default_factory=list)
+    metadata: dict[str, str] = Field(default_factory=dict)
 
 
 class AnalysisContext(BaseModel):

@@ -5,6 +5,7 @@ from sktr_rules.rules import (
     LargeFunctionDetectedRule,
     NewDependencyDetectedRule,
     default_rules,
+    rules_from_config,
 )
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     "NewDependencyDetectedRule",
     "RuleRegistry",
     "default_rules",
+    "rules_from_config",
 ]

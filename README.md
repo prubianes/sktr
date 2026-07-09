@@ -13,22 +13,51 @@ a skeletal review pipeline, a placeholder terminal reporter, and tests.
 
 ## Configuration
 
-SKTR looks for `sktr.toml`, `sktr.yaml`, or `sktr.yml` in the current directory.
+SKTR looks for `sktr.yml` or `sktr.yaml` in the current directory.
 
-Example `sktr.yaml`:
+Example `sktr.yml`:
 
 ```yaml
+project:
+  name: sample-app
 rules:
+  enabled:
+    - new_dependency
+    - large_file
+    - large_function
+    - forbidden_dependency
+  large_file:
+    max_changed_lines: 300
+  large_function:
+    max_lines: 80
   forbidden_dependencies:
     - source: "controllers"
       target: "repositories"
+      reason: "Controllers should access repositories through services."
 ```
 
-Equivalent `sktr.toml`:
+## Review Scopes
 
-```toml
-[rules]
-forbidden_dependencies = [
-  { source = "controllers", target = "repositories" },
-]
+By default, SKTR reviews the current working tree against `HEAD`:
+
+```bash
+sktr review
+```
+
+Review the current branch against the merge-base with the configured base branch:
+
+```bash
+sktr review --branch
+```
+
+Use an explicit base branch:
+
+```bash
+sktr review --base develop
+```
+
+Review one commit against its parent:
+
+```bash
+sktr review --commit HEAD~1
 ```

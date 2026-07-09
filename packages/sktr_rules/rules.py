@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sktr_core.config import ForbiddenDependency
+from sktr_core.config import DEFAULT_ENABLED_RULES, ForbiddenDependency, RuleConfig
 from sktr_core.model import (
     Dependency,
     DependencyKind,
@@ -21,6 +21,7 @@ from sktr_core.plugins import Rule
 @dataclass(frozen=True)
 class NewDependencyDetectedRule:
     id: str = "dependency.new"
+    key: str = "new_dependency"
     name: str = "New dependency detected"
 
     def evaluate(self, system: System, context: ReviewContext) -> list[Issue]:
@@ -39,8 +40,11 @@ class NewDependencyDetectedRule:
                         location=dependency.location,
                         rule_id=self.id,
                         metadata={
+                            "rule_key": self.key,
+                            "rule_name": self.name,
                             "source": dependency.source,
                             "target": dependency.target,
+                            "dependency_kind": dependency.kind.value,
                         },
                     )
                 )
@@ -51,6 +55,7 @@ class NewDependencyDetectedRule:
 class LargeFileChangedRule:
     threshold: int = 300
     id: str = "change.large_file"
+    key: str = "large_file"
     name: str = "Large file changed"
 
     def evaluate(self, system: System, context: ReviewContext) -> list[Issue]:
@@ -68,9 +73,14 @@ class LargeFileChangedRule:
                     category=IssueCategory.MAINTAINABILITY,
                     rule_id=self.id,
                     metadata={
+                        "rule_key": self.key,
+                        "rule_name": self.name,
                         "path": change.path,
+                        "status": change.status,
+                        "added_lines": str(change.added_lines),
+                        "removed_lines": str(change.removed_lines),
                         "changed_lines": str(changed_lines),
-                        "threshold": str(self.threshold),
+                        "max_changed_lines": str(self.threshold),
                     },
                 )
             )
@@ -81,6 +91,7 @@ class LargeFileChangedRule:
 class LargeFunctionDetectedRule:
     threshold: int = 80
     id: str = "symbol.large_function"
+    key: str = "large_function"
     name: str = "Large function detected"
 
     def evaluate(self, system: System, context: ReviewContext) -> list[Issue]:
@@ -102,10 +113,13 @@ class LargeFunctionDetectedRule:
                         location=symbol.location,
                         rule_id=self.id,
                         metadata={
+                            "rule_key": self.key,
+                            "rule_name": self.name,
                             "path": source_file.path,
                             "symbol": symbol.name,
+                            "symbol_kind": symbol.kind.value,
                             "line_count": str(line_count),
-                            "threshold": str(self.threshold),
+                            "max_lines": str(self.threshold),
                         },
                     )
                 )
@@ -116,7 +130,8 @@ class LargeFunctionDetectedRule:
 class ForbiddenDependencyRule:
     forbidden_dependencies: list[ForbiddenDependency]
     id: str = "architecture.forbidden_dependency"
-    name: str = "Direct import between forbidden modules"
+    key: str = "forbidden_dependency"
+    name: str = "Forbidden dependency"
 
     def evaluate(self, system: System, context: ReviewContext) -> list[Issue]:
         issues: list[Issue] = []
@@ -129,20 +144,23 @@ class ForbiddenDependencyRule:
                 issues.append(
                     Issue(
                         id=f"{self.id}:{dependency.source}:{dependency.target}",
-                        title="Direct import between forbidden modules",
+                        title=self.name,
                         description=(
-                            f"{dependency.source} imports {target_path} directly.\n"
-                            "This violates configured dependency rules."
+                            f"{dependency.source} imports {target_path}.\n"
+                            f"Reason:\n{violation.reason or 'This violates configured dependency rules.'}"
                         ),
                         severity=IssueSeverity.HIGH,
                         category=IssueCategory.ARCHITECTURE,
                         location=dependency.location,
                         rule_id=self.id,
                         metadata={
+                            "rule_key": self.key,
+                            "rule_name": self.name,
                             "source": dependency.source,
                             "target": target_path,
                             "forbidden_source": violation.source,
                             "forbidden_target": violation.target,
+                            "reason": violation.reason or "",
                         },
                     )
                 )
@@ -161,18 +179,28 @@ class ForbiddenDependencyRule:
 
 def default_rules(
     *,
+    enabled: list[str] | None = None,
     forbidden_dependencies: list[ForbiddenDependency] | None = None,
-    large_file_changed_lines: int = 300,
-    large_function_lines: int = 80,
+    large_file_max_changed_lines: int = 300,
+    large_function_max_lines: int = 80,
 ) -> list[Rule]:
-    rules: list[Rule] = [
-        NewDependencyDetectedRule(),
-        LargeFileChangedRule(threshold=large_file_changed_lines),
-        LargeFunctionDetectedRule(threshold=large_function_lines),
-    ]
-    if forbidden_dependencies:
-        rules.append(ForbiddenDependencyRule(forbidden_dependencies=forbidden_dependencies))
-    return rules
+    enabled_rules = set(enabled or DEFAULT_ENABLED_RULES)
+    rules_by_key: dict[str, Rule] = {
+        "new_dependency": NewDependencyDetectedRule(),
+        "large_file": LargeFileChangedRule(threshold=large_file_max_changed_lines),
+        "large_function": LargeFunctionDetectedRule(threshold=large_function_max_lines),
+        "forbidden_dependency": ForbiddenDependencyRule(forbidden_dependencies=forbidden_dependencies or []),
+    }
+    return [rule for key, rule in rules_by_key.items() if key in enabled_rules]
+
+
+def rules_from_config(config: RuleConfig) -> list[Rule]:
+    return default_rules(
+        enabled=config.enabled,
+        forbidden_dependencies=config.forbidden_dependencies,
+        large_file_max_changed_lines=config.large_file.max_changed_lines,
+        large_function_max_lines=config.large_function.max_lines,
+    )
 
 
 def _source_files(system: System) -> list[SourceFile]:

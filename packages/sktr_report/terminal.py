@@ -43,5 +43,20 @@ class TerminalReporter:
     def _issue_lines(self, issues: list[Issue]) -> list[str]:
         lines: list[str] = []
         for issue in issues:
-            lines.append(f"[yellow]⚠[/yellow] {issue.description}")
+            if issue.metadata.get("rule_key") == "forbidden_dependency":
+                lines.extend(self._forbidden_dependency_lines(issue))
+            else:
+                lines.append(f"[yellow]⚠[/yellow] {issue.title}")
+                lines.append(issue.description)
         return lines
+
+    def _forbidden_dependency_lines(self, issue: Issue) -> list[str]:
+        source = issue.metadata.get("source", "")
+        target = issue.metadata.get("target", "")
+        reason = issue.metadata.get("reason") or "This violates configured dependency rules."
+        return [
+            f"[yellow]⚠[/yellow] {issue.title}",
+            f"{source} imports {target}",
+            "Reason:",
+            reason,
+        ]

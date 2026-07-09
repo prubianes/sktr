@@ -112,7 +112,7 @@ def _review_result() -> ReviewResult:
         issues=[
             Issue(
                 id="architecture.forbidden_dependency:controllers/order_controller.py",
-                title="Direct import between forbidden modules",
+                title="Forbidden dependency",
                 description="controllers/order_controller.py imports repositories/order_repository.py directly.",
                 severity=IssueSeverity.HIGH,
                 category=IssueCategory.ARCHITECTURE,
