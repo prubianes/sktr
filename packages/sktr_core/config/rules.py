@@ -15,10 +15,27 @@ DEFAULT_ENABLED_RULES = [
 
 class ProjectConfig(BaseModel):
     name: str | None = None
+    default_base: str = "main"
 
 
 class GitConfig(BaseModel):
     default_base_branch: str = "main"
+
+
+class ReviewConfig(BaseModel):
+    default_scope: str = "working_tree"
+
+
+class PluginsConfig(BaseModel):
+    analyzers: list[str] = Field(default_factory=lambda: ["sktr-python"])
+    rules: list[str] = Field(default_factory=lambda: ["sktr-rules-default"])
+    outputs: list[str] = Field(default_factory=lambda: ["terminal", "markdown", "json", "mermaid"])
+    ai_providers: list[str] = Field(default_factory=list)
+
+
+class AIConfig(BaseModel):
+    enabled: bool = False
+    provider: str | None = None
 
 
 class ForbiddenDependency(BaseModel):
@@ -45,6 +62,9 @@ class RuleConfig(BaseModel):
 class SKTRConfig(BaseModel):
     project: ProjectConfig = Field(default_factory=ProjectConfig)
     git: GitConfig = Field(default_factory=GitConfig)
+    review: ReviewConfig = Field(default_factory=ReviewConfig)
+    plugins: PluginsConfig = Field(default_factory=PluginsConfig)
+    ai: AIConfig = Field(default_factory=AIConfig)
     rules: RuleConfig = Field(default_factory=RuleConfig)
 
 
@@ -59,7 +79,11 @@ def load_config(path: Path | None = None) -> SKTRConfig:
         with config_path.open("rb") as file:
             data = tomllib.load(file)
 
-    return SKTRConfig.model_validate(data)
+    config = SKTRConfig.model_validate(data)
+    project_data = data.get("project")
+    if isinstance(project_data, dict) and project_data.get("default_base"):
+        config.git.default_base_branch = config.project.default_base
+    return config
 
 
 def _default_config_path() -> Path:
@@ -71,7 +95,7 @@ def _default_config_path() -> Path:
 
 
 def _load_simple_yaml(path: Path) -> dict[str, object]:
-    data: dict[str, object] = {"project": {}, "git": {}, "rules": {}}
+    data: dict[str, object] = {"project": {}, "git": {}, "review": {}, "plugins": {}, "ai": {}, "rules": {}}
     section: str | None = None
     subsection: str | None = None
     current_dependency: dict[str, str] | None = None
@@ -96,7 +120,7 @@ def _load_simple_yaml(path: Path) -> dict[str, object]:
                 data.setdefault(section, {})
             continue
 
-        if section in {"project", "git"}:
+        if section in {"project", "git", "review", "ai"}:
             key, value = _yaml_key_value(stripped)
             if key is None:
                 continue
@@ -106,6 +130,23 @@ def _load_simple_yaml(path: Path) -> dict[str, object]:
             continue
 
         if section != "rules":
+            if section == "plugins":
+                plugins = data.setdefault("plugins", {})
+                assert isinstance(plugins, dict)
+                if indent == 2:
+                    key, value = _yaml_key_value(stripped)
+                    if key is None:
+                        continue
+                    subsection = key
+                    if value:
+                        plugins[key] = _coerce_scalar(value)
+                    else:
+                        plugins.setdefault(key, [])
+                    continue
+                if stripped.startswith("- ") and subsection is not None:
+                    values = plugins.setdefault(subsection, [])
+                    assert isinstance(values, list)
+                    values.append(_coerce_scalar(stripped[2:]))
             continue
 
         rules = data.setdefault("rules", {})
@@ -164,6 +205,12 @@ def _yaml_key_value(line: str) -> tuple[str | None, str]:
 
 def _coerce_scalar(value: str) -> object:
     normalized = value.strip().strip('"').strip("'")
+    if normalized == "null":
+        return None
+    if normalized == "true":
+        return True
+    if normalized == "false":
+        return False
     if normalized.isdigit():
         return int(normalized)
     return normalized

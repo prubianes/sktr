@@ -1,0 +1,18 @@
+project:
+  name: skrt
+  default_base: main
+review:
+  default_scope: working_tree
+plugins:
+  analyzers:
+    - sktr-python
+  rules:
+    - sktr-rules-default
+  outputs:
+    - terminal
+    - markdown
+    - json
+    - mermaid
+ai:
+  enabled: false
+  provider: null

@@ -7,18 +7,77 @@ import typer
 from sktr_core.config import load_config
 from sktr_core.model import ReviewResult
 from sktr_core.pipeline import ReviewPipeline
-from sktr_graph import GraphBuilder, GraphLevel, MermaidGraphOutput
+from sktr_core.plugins import MissingPluginError, PluginRegistry
+from sktr_graph import GraphBuilder, GraphLevel
 from sktr_git import ReviewScope, SubprocessGitProvider
-from sktr_python import PythonAstAnalyzer
-from sktr_report import output_for_format
-from sktr_rules import RuleRegistry, rules_from_config
 
 app = typer.Typer(help="System Knowledge & Technical Review.")
+plugins_app = typer.Typer(help="Inspect SKTR plugins.")
+app.add_typer(plugins_app, name="plugins")
+
+DEFAULT_CONFIG = """project:
+  name: sample-app
+  default_base: main
+review:
+  default_scope: working_tree
+plugins:
+  analyzers:
+    - sktr-python
+  rules:
+    - sktr-rules-default
+  outputs:
+    - terminal
+    - markdown
+    - json
+    - mermaid
+ai:
+  enabled: false
+  provider: null
+"""
+
+DEFAULT_OUTPUTS = ["terminal", "markdown", "json", "mermaid"]
 
 
 @app.callback()
 def main() -> None:
     """System Knowledge & Technical Review."""
+
+
+@app.command()
+def init(
+    yes: bool = typer.Option(False, "--yes", "-y", help="Create the default config without prompts."),
+    force: bool = typer.Option(False, "--force", help="Overwrite an existing config file."),
+) -> None:
+    """Initialize SKTR configuration in the current project."""
+    config_path = Path("sktr.yml")
+    if config_path.exists() and not force:
+        typer.secho("SKTR is already initialized.", fg=typer.colors.YELLOW, bold=True)
+        typer.echo("sktr.yml already exists in this directory.")
+        typer.echo("Use sktr init --force to overwrite it.")
+        raise typer.Exit(code=1)
+
+    _print_init_header()
+    project_name = "sample-app"
+    default_base = "main"
+    outputs = DEFAULT_OUTPUTS
+
+    if yes:
+        _print_default_choices()
+    else:
+        use_defaults = typer.confirm("Would you like to use the recommended SKTR defaults?", default=True)
+        if use_defaults:
+            typer.secho("✓ Using recommended defaults", fg=typer.colors.GREEN)
+            _print_default_choices()
+        else:
+            typer.secho("Customize SKTR settings", fg=typer.colors.CYAN, bold=True)
+            project_name = typer.prompt("Project name", default=project_name)
+            default_base = typer.prompt("Default base branch", default=default_base)
+            outputs = _prompt_outputs(DEFAULT_OUTPUTS)
+
+    content = _render_config(project_name=project_name, default_base=default_base, outputs=outputs)
+
+    config_path.write_text(content, encoding="utf-8")
+    _print_init_success(config_path, outputs=outputs)
 
 
 @app.command()
@@ -51,13 +110,14 @@ def review(
     ),
 ) -> None:
     """Analyze the current Git diff and produce an architecture-focused review."""
-    config = load_config()
+    config = _require_config()
+    registry = PluginRegistry.discover()
     scope = _review_scope(branch=branch, base=base, commit=commit)
     base_branch = base or config.git.default_base_branch
-    result = _build_review_result(scope=scope, base_branch=base_branch, commit=commit)
+    result = _build_review_result(scope=scope, base_branch=base_branch, commit=commit, registry=registry)
     try:
-        selected_output = output_for_format(output_format)
-    except ValueError as error:
+        selected_output = registry.require("output", output_format).plugin.create_output()
+    except MissingPluginError as error:
         raise typer.BadParameter(str(error), param_hint="--format") from error
     selected_output.write(result, str(output) if output is not None else None)
 
@@ -85,14 +145,53 @@ def graph(
     if graph_format != "mermaid":
         raise typer.BadParameter("Unsupported graph format. Supported formats: mermaid.", param_hint="--format")
 
-    config = load_config()
+    config = _require_config()
+    registry = PluginRegistry.discover()
     result = _build_review_result(
         scope=ReviewScope.WORKING_TREE,
         base_branch=config.git.default_base_branch,
         commit=None,
+        registry=registry,
     )
     dependency_graph = GraphBuilder().build(result.system, level=level)
-    MermaidGraphOutput().write(dependency_graph, str(output) if output is not None else None)
+    try:
+        graph_output = registry.require("output", graph_format).plugin.create_output()
+    except MissingPluginError as error:
+        raise typer.BadParameter(str(error), param_hint="--format") from error
+    graph_output.write(dependency_graph, str(output) if output is not None else None)
+
+
+@plugins_app.command("list")
+def plugins_list() -> None:
+    """List installed SKTR plugins."""
+    registry = PluginRegistry.discover()
+    sections = [
+        ("Analyzers", "analyzer"),
+        ("Rules", "rules"),
+        ("Outputs", "output"),
+        ("AI Providers", "ai_provider"),
+    ]
+    for title, plugin_type in sections:
+        typer.echo(title)
+        records = registry.by_type(plugin_type)
+        if not records:
+            typer.echo("  (none)")
+            continue
+        for record in records:
+            typer.echo(f"  ✓ {record.metadata.name}")
+
+
+@plugins_app.command("doctor")
+def plugins_doctor() -> None:
+    """Validate configured SKTR plugins."""
+    config = _require_config()
+    registry = PluginRegistry.discover()
+    errors = registry.validate_configured(_configured_plugins(config))
+    if errors:
+        for error in errors:
+            typer.echo(f"✗ {error}")
+        raise typer.Exit(code=1)
+    typer.echo("✓ Plugin configuration is valid.")
 
 
 def _review_scope(*, branch: bool, base: str | None, commit: str | None) -> ReviewScope:
@@ -105,9 +204,24 @@ def _review_scope(*, branch: bool, base: str | None, commit: str | None) -> Revi
     return ReviewScope.WORKING_TREE
 
 
-def _build_review_result(*, scope: ReviewScope, base_branch: str, commit: str | None) -> ReviewResult:
-    config = load_config()
-    rule_registry = RuleRegistry(rules_from_config(config.rules))
+def _build_review_result(
+    *,
+    scope: ReviewScope,
+    base_branch: str,
+    commit: str | None,
+    registry: PluginRegistry | None = None,
+) -> ReviewResult:
+    config = _require_config()
+    plugin_registry = registry or PluginRegistry.discover()
+    analyzers = [
+        plugin_registry.require("analyzer", name).plugin.create_analyzer()
+        for name in config.plugins.analyzers
+    ]
+    rules = [
+        rule
+        for name in config.plugins.rules
+        for rule in plugin_registry.require("rules", name).plugin.create_rules(config.rules)
+    ]
     git_diff = SubprocessGitProvider(
         scope=scope,
         base_branch=base_branch,
@@ -115,7 +229,98 @@ def _build_review_result(*, scope: ReviewScope, base_branch: str, commit: str | 
     ).current_diff()
     pipeline = ReviewPipeline(
         diff=git_diff,
-        analyzers=[PythonAstAnalyzer()],
-        rules=rule_registry.all(),
+        analyzers=analyzers,
+        rules=rules,
     )
     return pipeline.run()
+
+
+def _require_config():
+    config_path = _config_path()
+    if config_path is None:
+        typer.secho("SKTR is not initialized in this directory.", fg=typer.colors.RED, bold=True)
+        typer.echo("No sktr.yml or sktr.yaml file was found.")
+        typer.echo("Run sktr init to create one.")
+        raise typer.Exit(code=1)
+    return load_config(config_path)
+
+
+def _config_path() -> Path | None:
+    for name in ("sktr.yml", "sktr.yaml"):
+        path = Path(name)
+        if path.is_file():
+            return path
+    return None
+
+
+def _configured_plugins(config) -> dict[str, list[str]]:
+    configured = {
+        "analyzer": config.plugins.analyzers,
+        "rules": config.plugins.rules,
+        "output": config.plugins.outputs,
+        "ai_provider": config.plugins.ai_providers,
+    }
+    if config.ai.enabled and config.ai.provider:
+        configured["ai_provider"] = [*configured["ai_provider"], config.ai.provider]
+    return configured
+
+
+def _print_init_header() -> None:
+    typer.echo()
+    typer.secho("◆ SKTR Init", fg=typer.colors.CYAN, bold=True)
+    typer.echo("System Knowledge & Technical Review")
+    typer.echo("Set up deterministic architecture review for this project.")
+    typer.echo()
+
+
+def _print_default_choices() -> None:
+    typer.echo("Project name: sample-app")
+    typer.echo("Default base: main")
+    typer.echo("Plugins: sktr-python, sktr-rules-default")
+    typer.echo("Outputs: terminal, markdown, json, mermaid")
+    typer.echo()
+
+
+def _print_init_success(config_path: Path, *, outputs: list[str]) -> None:
+    typer.secho(f"✓ Created {config_path}", fg=typer.colors.GREEN, bold=True)
+    typer.echo()
+    typer.echo("Enabled:")
+    typer.echo("  analyzers: sktr-python")
+    typer.echo("  rules:     sktr-rules-default")
+    typer.echo(f"  outputs:   {', '.join(outputs)}")
+    typer.echo()
+    typer.echo("Next steps:")
+    typer.echo("  sktr plugins doctor")
+    typer.echo("  sktr review")
+    typer.echo("  sktr review --format markdown --output REVIEW.md")
+
+
+def _prompt_outputs(defaults: list[str]) -> list[str]:
+    outputs: list[str] = []
+    for output in defaults:
+        if typer.confirm(f"Enable {output} output?", default=True):
+            outputs.append(output)
+    if not outputs:
+        typer.secho("No outputs selected; enabling terminal output.", fg=typer.colors.YELLOW)
+        return ["terminal"]
+    return outputs
+
+
+def _render_config(*, project_name: str, default_base: str, outputs: list[str]) -> str:
+    output_lines = "\n".join(f"    - {output}" for output in outputs)
+    return f"""project:
+  name: {project_name}
+  default_base: {default_base}
+review:
+  default_scope: working_tree
+plugins:
+  analyzers:
+    - sktr-python
+  rules:
+    - sktr-rules-default
+  outputs:
+{output_lines}
+ai:
+  enabled: false
+  provider: null
+"""

@@ -15,6 +15,24 @@ review scopes, and pluggable outputs.
 
 SKTR looks for `sktr.yml` or `sktr.yaml` in the current directory.
 
+Create a config interactively:
+
+```bash
+sktr init
+```
+
+Create the default config without prompts:
+
+```bash
+sktr init --yes
+```
+
+Overwrite an existing config:
+
+```bash
+sktr init --force
+```
+
 Example `sktr.yml`:
 
 ```yaml
@@ -106,4 +124,25 @@ sktr graph
 sktr graph --level module
 sktr graph --level file
 sktr graph --format mermaid --output architecture.mmd
+```
+
+## Plugins
+
+SKTR discovers plugins through Python entry points:
+
+- `sktr.analyzers`
+- `sktr.rules`
+- `sktr.outputs`
+- `sktr.ai_providers`
+
+List installed plugins:
+
+```bash
+sktr plugins list
+```
+
+Validate configured plugins:
+
+```bash
+sktr plugins doctor
 ```

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typer
 from typer.testing import CliRunner
+from pathlib import Path
 
 from sktr_cli.main import app
 from sktr_cli.main import _review_scope
@@ -45,14 +46,52 @@ def test_commit_and_base_are_invalid_combination() -> None:
 
 
 def test_cli_rejects_commit_with_branch() -> None:
-    result = runner.invoke(app, ["review", "--commit", "HEAD~1", "--branch"])
+    with _isolated(Path.cwd() / ".tmp-review-scope-test-1"):
+        Path("sktr.yml").write_text(_config(), encoding="utf-8")
+        result = runner.invoke(app, ["review", "--commit", "HEAD~1", "--branch"])
 
     assert result.exit_code != 0
     assert "--commit cannot be combined" in result.output
 
 
 def test_cli_rejects_commit_with_base() -> None:
-    result = runner.invoke(app, ["review", "--commit", "HEAD~1", "--base", "main"])
+    with _isolated(Path.cwd() / ".tmp-review-scope-test-2"):
+        Path("sktr.yml").write_text(_config(), encoding="utf-8")
+        result = runner.invoke(app, ["review", "--commit", "HEAD~1", "--base", "main"])
 
     assert result.exit_code != 0
     assert "--commit cannot be combined" in result.output
+
+
+def test_review_command_requires_config() -> None:
+    with _isolated(Path.cwd() / ".tmp-review-scope-test-3"):
+        result = runner.invoke(app, ["review"])
+
+        assert result.exit_code == 1
+        assert "SKTR is not initialized" in result.output
+
+
+def _config() -> str:
+    return "project:\n  name: test\n  default_base: main\n"
+
+
+class _isolated:
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.previous = Path.cwd()
+
+    def __enter__(self):
+        import os
+        import shutil
+
+        if self.path.exists():
+            shutil.rmtree(self.path)
+        self.path.mkdir()
+        os.chdir(self.path)
+
+    def __exit__(self, exc_type, exc, tb):
+        import os
+        import shutil
+
+        os.chdir(self.previous)
+        shutil.rmtree(self.path)

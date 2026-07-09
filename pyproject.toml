@@ -1,6 +1,6 @@
 [project]
 name = "sktr"
-version = "0.9.0"
+version = "0.10.0"
 description = "System Knowledge & Technical Review"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -12,6 +12,18 @@ dependencies = [
 
 [project.scripts]
 sktr = "sktr_cli.main:app"
+
+[project.entry-points."sktr.analyzers"]
+python = "sktr_python:PythonAnalyzerPlugin"
+
+[project.entry-points."sktr.rules"]
+default = "sktr_rules:DefaultRulesPlugin"
+
+[project.entry-points."sktr.outputs"]
+terminal = "sktr_report:TerminalOutputPlugin"
+markdown = "sktr_report:MarkdownOutputPlugin"
+json = "sktr_report:JsonOutputPlugin"
+mermaid = "sktr_graph:MermaidOutputPlugin"
 
 [dependency-groups]
 dev = [
