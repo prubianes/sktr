@@ -24,4 +24,44 @@ def test_score_caps_repeated_findings_from_the_same_rule() -> None:
         issues=issues,
     )
 
-    assert risk_score(result) == 85
+    assert risk_score(result) == 100
+
+
+def test_score_caps_repeated_findings_by_category() -> None:
+    issues = [
+        Issue(
+            id=f"api.removed:{index}",
+            title="Public API removed",
+            description="A public symbol was removed.",
+            severity=IssueSeverity.HIGH,
+            category=IssueCategory.ARCHITECTURE,
+            rule_id="api.removed",
+        )
+        for index in range(100)
+    ]
+
+    assert risk_score(ReviewResult(status="ready", issues=issues)) == 72
+
+
+def test_score_reflects_independent_risk_categories() -> None:
+    result = ReviewResult(
+        status="ready",
+        issues=[
+            Issue(
+                id="architecture",
+                title="Architecture issue",
+                description="Boundary removed.",
+                severity=IssueSeverity.HIGH,
+                category=IssueCategory.ARCHITECTURE,
+            ),
+            Issue(
+                id="maintainability",
+                title="Maintainability issue",
+                description="Large function.",
+                severity=IssueSeverity.MEDIUM,
+                category=IssueCategory.MAINTAINABILITY,
+            ),
+        ],
+    )
+
+    assert risk_score(result) == 76

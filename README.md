@@ -140,6 +140,18 @@ Markdown output is a deterministic review document with a summary, risk score,
 changed-file table, grouped issues, architecture and maintainability findings,
 suggestions, and metadata.
 
+### Risk score
+
+The score starts at 100 and deterministic findings subtract severity-weighted
+penalties. Repeated findings from the same rule and category are capped so a
+large diff cannot reach zero through repetition alone. Informational findings
+and the number of changed files do not reduce the score; changed-file count
+represents review effort, not architectural risk. Independent risk categories
+accumulate, while each category has its own cap.
+
+Risk levels are low (85-100), medium (65-84), high (40-64), and critical
+(0-39).
+
 ## Knowledge Enrichment
 
 Before rules run, SKTR enriches the Knowledge Model with deterministic engineering

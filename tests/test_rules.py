@@ -47,6 +47,14 @@ def test_new_dependency_detected_rule_reports_import_dependencies() -> None:
                     source="controllers/order_controller.py",
                     target="repositories.order_repository",
                     kind=DependencyKind.IMPORT,
+                    metadata={
+                        "metrics": {
+                            "new_dependency": True,
+                            "cross_module_dependency": True,
+                            "source_module": "controllers",
+                            "target_module": "repositories",
+                        }
+                    },
                 )
             ],
         )
@@ -56,7 +64,7 @@ def test_new_dependency_detected_rule_reports_import_dependencies() -> None:
 
     assert len(issues) == 1
     assert issues[0].title == "New dependency detected"
-    assert issues[0].metadata["target"] == "repositories.order_repository"
+    assert issues[0].metadata["target"] == "repositories"
     assert issues[0].metadata["rule_key"] == "new_dependency"
 
 
@@ -178,7 +186,13 @@ def test_high_fan_out_rule_reports_module_above_threshold() -> None:
             source="orders/service.py",
             target=f"module_{index}",
             kind=DependencyKind.IMPORT,
-            metadata={"metrics": {"source_module": "orders", "target_module": f"module_{index}"}},
+            metadata={
+                "metrics": {
+                    "source_module": "orders",
+                    "target_module": f"module_{index}",
+                    "cross_module_dependency": True,
+                }
+            },
         )
         for index in range(3)
     ]
@@ -188,6 +202,74 @@ def test_high_fan_out_rule_reports_module_above_threshold() -> None:
 
     assert len(issues) == 1
     assert issues[0].metadata["fan_out"] == "3"
+
+
+def test_dependency_rules_ignore_non_architecture_imports() -> None:
+    dependencies = [
+        Dependency(
+            source="orders/service.py",
+            target=target,
+            kind=DependencyKind.IMPORT,
+            metadata={
+                "metrics": {
+                    "new_dependency": True,
+                    "cross_module_dependency": False,
+                    "source_module": "orders",
+                    "target_module": target,
+                }
+            },
+        )
+        for target in ("os", "pydantic", "orders")
+    ]
+    system = _system_with_file(SourceFile(path="orders/service.py", dependencies=dependencies))
+
+    assert NewDependencyDetectedRule().evaluate(system, ReviewContext()) == []
+    assert HighFanOutRule(threshold=1).evaluate(system, ReviewContext()) == []
+
+
+def test_new_dependencies_are_grouped_by_module_edge() -> None:
+    dependencies = [
+        Dependency(
+            source=f"orders/file_{index}.py",
+            target=f"payments.client_{index}",
+            kind=DependencyKind.IMPORT,
+            metadata={
+                "metrics": {
+                    "new_dependency": True,
+                    "cross_module_dependency": True,
+                    "source_module": "orders",
+                    "target_module": "payments",
+                }
+            },
+        )
+        for index in range(3)
+    ]
+    system = _system_with_file(SourceFile(path="orders/service.py", dependencies=dependencies))
+
+    issues = NewDependencyDetectedRule().evaluate(system, ReviewContext())
+
+    assert len(issues) == 1
+    assert issues[0].metadata["dependency_count"] == "3"
+    assert "3 imports" in issues[0].description
+
+
+def test_public_api_removal_suppresses_methods_owned_by_removed_class() -> None:
+    system = _system_with_file(
+        SourceFile(
+            path="reporter.py",
+            metadata={
+                "removed_symbols": [
+                    "class:Reporter",
+                    "method:Reporter.render",
+                    "method:Output.write",
+                ]
+            },
+        )
+    )
+
+    issues = PublicApiChangedRule().evaluate(system, ReviewContext())
+
+    assert [issue.metadata["symbol"] for issue in issues] == ["Reporter", "Output.write"]
 
 
 def test_missing_tests_rule_only_reports_when_no_test_file_changed() -> None:

@@ -35,7 +35,7 @@ class SymbolMetricsEnricher:
             baseline_symbols = {
                 str(value) for value in source_file.metadata.get("baseline_symbols", [])
             }
-            current_symbols = {f"{symbol.kind.value}:{symbol.name}" for symbol in source_file.symbols}
+            current_symbols = {_symbol_identity(symbol) for symbol in source_file.symbols}
             source_file.metadata["removed_symbols"] = sorted(baseline_symbols - current_symbols)
             source_file.metadata["new_symbols"] = sorted(current_symbols - baseline_symbols)
             change_status = changed_paths.get(source_file.path).status if source_file.path in changed_paths else "unchanged"
@@ -61,11 +61,14 @@ class DependencyEnricher:
             for dependency in source_file.dependencies:
                 target_module = _module_from_dependency(dependency)
                 cross_module = bool(target_module and source_module and target_module != source_module)
+                scope = str(dependency.metadata.get("scope", "unknown"))
                 dependency.metadata["metrics"] = {
                     "new_dependency": dependency.target not in baseline_dependencies,
                     "removed_dependency": False,
-                    "cross_module_dependency": cross_module and target_module in known_modules,
+                    "cross_module_dependency": cross_module
+                    and (scope == "internal" or target_module in known_modules),
                     "same_module_dependency": bool(target_module and target_module == source_module),
+                    "scope": scope,
                     "source_module": source_module,
                     "target_module": target_module,
                 }
@@ -89,9 +92,10 @@ class ModuleEnricher:
                 source_module = _module_from_path(source_file.path)
                 for dependency in source_file.dependencies:
                     target_module = _dependency_metric(dependency, "target_module")
-                    if source_module not in module_names and target_module in module_names:
+                    is_cross_module = bool(_dependency_metric(dependency, "cross_module_dependency"))
+                    if is_cross_module and source_module not in module_names and target_module in module_names:
                         incoming += 1
-                    if source_module in module_names and target_module not in module_names and target_module:
+                    if is_cross_module and source_module in module_names and target_module not in module_names:
                         outgoing += 1
 
             module.metadata["metrics"] = {
@@ -115,6 +119,7 @@ class RiskEnricher:
                 dependency
                 for dependency in source_file.dependencies
                 if _dependency_metric(dependency, "new_dependency")
+                and _dependency_metric(dependency, "cross_module_dependency")
             ]
             if len(new_dependencies) >= MANY_NEW_DEPENDENCIES:
                 indicators.append({"level": "MEDIUM", "reason": "many new dependencies"})
@@ -163,6 +168,7 @@ class SummaryEnricher:
             for source_file in _source_files(system)
             for dependency in source_file.dependencies
             if _dependency_metric(dependency, "new_dependency")
+            and _dependency_metric(dependency, "cross_module_dependency")
         ]
         cross_module_dependencies = [
             dependency
@@ -200,6 +206,11 @@ def _symbol_size(symbol: Symbol) -> int:
     if symbol.location.start_line is None or symbol.location.end_line is None:
         return 0
     return symbol.location.end_line - symbol.location.start_line + 1
+
+
+def _symbol_identity(symbol: Symbol) -> str:
+    qualified_name = f"{symbol.owner}.{symbol.name}" if symbol.owner else symbol.name
+    return f"{symbol.kind.value}:{qualified_name}"
 
 
 def _module_from_path(path: str) -> str:

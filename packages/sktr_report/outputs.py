@@ -344,18 +344,19 @@ def _issue_groups(issues: list[Issue]) -> list[_IssueGroup]:
 
 
 def _issue_files(issues: list[Issue]) -> list[str]:
-    return sorted(
-        {
-            str(path)
-            for issue in issues
-            for path in [
-                issue.metadata.get("path"),
-                issue.metadata.get("source"),
-                issue.location.file_path if issue.location else None,
-            ]
-            if path
-        }
-    )
+    paths: set[str] = set()
+    for issue in issues:
+        path = issue.metadata.get("path")
+        if path:
+            paths.add(str(path))
+        source = str(issue.metadata.get("source", ""))
+        if "/" in source or "." in Path(source).name:
+            paths.add(source)
+        listed_paths = str(issue.metadata.get("paths", ""))
+        paths.update(path for path in listed_paths.split(",") if path)
+        if issue.location:
+            paths.add(issue.location.file_path)
+    return sorted(paths)
 
 
 def _format_files(files: list[str], *, markdown: bool) -> str:

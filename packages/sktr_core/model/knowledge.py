@@ -16,6 +16,7 @@ class Location(BaseModel):
 class Symbol(BaseModel):
     name: str
     kind: SymbolKind = SymbolKind.UNKNOWN
+    owner: str | None = None
     location: Location | None = None
     metadata: dict[str, object] = Field(default_factory=dict)
 

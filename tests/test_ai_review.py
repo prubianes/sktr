@@ -6,7 +6,7 @@ from pydantic import ValidationError
 from typer.testing import CliRunner
 
 from sktr_ai import NullAIProvider, OpenAIProvider
-from sktr_ai.prompts import build_ai_review_prompt
+from sktr_ai.prompts import build_ai_review_prompt, structured_review_context
 from sktr_ai.review import parse_ai_review_response
 from sktr_cli import main as cli_main
 from sktr_core.config import load_config
@@ -61,6 +61,18 @@ def test_ai_review_prompt_uses_structured_context_without_raw_diff() -> None:
     assert "RAW_SOURCE_SHOULD_NOT_APPEAR" not in prompt
     assert "src/orders/service.py" in prompt
     assert "forbidden-dependency" in prompt
+
+
+def test_ai_context_aggregates_repeated_findings() -> None:
+    context = _context()
+    template = context.issues[0]
+    context.issues = [template.model_copy(update={"id": f"forbidden-{index}"}) for index in range(50)]
+
+    payload = structured_review_context(context)
+
+    assert payload["issue_groups"][0]["count"] == 50
+    assert len(payload["priority_issues"]) == 20
+    assert payload["context_limits"]["issues_total"] == 50
 
 
 def test_openai_parses_unified_review_in_one_call(monkeypatch) -> None:

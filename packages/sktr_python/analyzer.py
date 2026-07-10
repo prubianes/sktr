@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import sys
 from pathlib import Path
 
 from sktr_core.model import Dependency, DependencyKind, Location, Module, SourceFile, Symbol, SymbolKind, System
@@ -26,7 +27,10 @@ class PythonAstAnalyzer:
             baseline_source = context.diff.base_file_contents.get(path)
             if current_source is None and baseline_source is None:
                 continue
-            files.append(self._analyze_file(path, current_source, baseline_source))
+            source_file = self._analyze_file(path, current_source, baseline_source)
+            for dependency in source_file.dependencies:
+                dependency.metadata["scope"] = self._dependency_scope(root, dependency.target)
+            files.append(source_file)
 
         return System(
             modules=[
@@ -67,7 +71,7 @@ class PythonAstAnalyzer:
             metadata={
                 "baseline_dependencies": sorted({dependency.target for dependency in baseline_dependencies}),
                 "baseline_symbols": sorted(
-                    {f"{symbol.kind.value}:{symbol.name}" for symbol in baseline_symbols}
+                    {_symbol_identity(symbol) for symbol in baseline_symbols}
                 ),
             },
         )
@@ -83,7 +87,7 @@ class PythonAstAnalyzer:
             elif isinstance(node, ast.ClassDef):
                 symbols.append(self._symbol(relative_path, node, SymbolKind.CLASS))
                 symbols.extend(
-                    self._symbol(relative_path, child, SymbolKind.METHOD)
+                    self._symbol(relative_path, child, SymbolKind.METHOD, owner=node.name)
                     for child in node.body
                     if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef)
                 )
@@ -116,12 +120,29 @@ class PythonAstAnalyzer:
         relative_path: str,
         node: ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef,
         kind: SymbolKind,
+        owner: str | None = None,
     ) -> Symbol:
         return Symbol(
             name=node.name,
             kind=kind,
+            owner=owner,
             location=self._location(relative_path, node),
         )
+
+    def _dependency_scope(self, root: Path, target: str) -> str:
+        if target.startswith("."):
+            return "internal"
+        top_level = target.split(".", 1)[0]
+        if top_level in sys.stdlib_module_names:
+            return "standard_library"
+        search_roots = (root, root / "src", root / "app", root / "lib", root / "packages")
+        if any(
+            (search_root / f"{top_level}.py").is_file()
+            or (search_root / top_level / "__init__.py").is_file()
+            for search_root in search_roots
+        ):
+            return "internal"
+        return "external"
 
     def _location(self, relative_path: str, node: ast.AST) -> Location:
         return Location(
@@ -136,3 +157,8 @@ class PythonAstAnalyzer:
         if value is None:
             return None
         return value + 1
+
+
+def _symbol_identity(symbol: Symbol) -> str:
+    qualified_name = f"{symbol.owner}.{symbol.name}" if symbol.owner else symbol.name
+    return f"{symbol.kind.value}:{qualified_name}"

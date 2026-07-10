@@ -25,32 +25,51 @@ class NewDependencyDetectedRule:
     name: str = "New dependency detected"
 
     def evaluate(self, system: System, context: ReviewContext) -> list[Issue]:
-        issues: list[Issue] = []
+        del context
+        edges: dict[tuple[str, str], list[Dependency]] = {}
         for source_file in _source_files(system):
+            if _is_test_path(source_file.path):
+                continue
             for dependency in source_file.dependencies:
                 if dependency.kind != DependencyKind.IMPORT:
                     continue
                 metrics = _metadata_dict(dependency.metadata.get("metrics"))
-                if metrics and not metrics.get("new_dependency", False):
+                if not metrics.get("new_dependency") or not metrics.get("cross_module_dependency"):
                     continue
-                issues.append(
-                    Issue(
-                        id=f"{self.id}:{dependency.source}:{dependency.target}",
-                        title="New dependency detected",
-                        description=f"{dependency.source} imports {dependency.target}.",
-                        severity=IssueSeverity.INFO,
-                        category=IssueCategory.COUPLING,
-                        location=dependency.location,
-                        rule_id=self.id,
-                        metadata={
-                            "rule_key": self.key,
-                            "rule_name": self.name,
-                            "source": dependency.source,
-                            "target": dependency.target,
-                            "dependency_kind": dependency.kind.value,
-                        },
-                    )
+                source_module = str(metrics.get("source_module", ""))
+                target_module = str(metrics.get("target_module", ""))
+                if not source_module or not target_module:
+                    continue
+                edges.setdefault((source_module, target_module), []).append(dependency)
+
+        issues: list[Issue] = []
+        for (source_module, target_module), dependencies in sorted(edges.items()):
+            paths = sorted({dependency.source for dependency in dependencies})
+            count = len(dependencies)
+            detail = "import" if count == 1 else f"{count} imports"
+            issues.append(
+                Issue(
+                    id=f"{self.id}:{source_module}:{target_module}",
+                    title="New dependency detected",
+                    description=(
+                        f"{source_module} added {detail} to {target_module} "
+                        f"across {len(paths)} file{'s' if len(paths) != 1 else ''}."
+                    ),
+                    severity=IssueSeverity.INFO,
+                    category=IssueCategory.COUPLING,
+                    location=dependencies[0].location,
+                    rule_id=self.id,
+                    metadata={
+                        "rule_key": self.key,
+                        "rule_name": self.name,
+                        "source": source_module,
+                        "target": target_module,
+                        "paths": ",".join(paths),
+                        "dependency_count": str(count),
+                        "dependency_kind": DependencyKind.IMPORT.value,
+                    },
                 )
+            )
         return issues
 
 
@@ -240,7 +259,7 @@ class HighFanOutRule:
                 metrics = _metadata_dict(dependency.metadata.get("metrics"))
                 source = str(metrics.get("source_module", ""))
                 target = str(metrics.get("target_module", ""))
-                if source and target and source != target:
+                if source and target and metrics.get("cross_module_dependency"):
                     targets_by_source.setdefault(source, set()).add(target)
                     paths_by_source.setdefault(source, source_file.path)
         return [
@@ -278,9 +297,19 @@ class PublicApiChangedRule:
             if _is_test_path(source_file.path):
                 continue
             removed = [str(value) for value in source_file.metadata.get("removed_symbols", [])]
+            removed_set = set(removed)
             for value in removed:
-                _, _, symbol = value.partition(":")
-                if not symbol or symbol.startswith("_"):
+                kind, _, symbol = value.partition(":")
+                if not symbol or symbol.rsplit(".", 1)[-1].startswith("_"):
+                    continue
+                if kind == SymbolKind.METHOD.value:
+                    owner, separator, _ = symbol.rpartition(".")
+                    if separator and any(
+                        f"{container_kind.value}:{owner}" in removed_set
+                        for container_kind in (SymbolKind.CLASS, SymbolKind.INTERFACE)
+                    ):
+                        continue
+                if kind == SymbolKind.METHOD.value and "." not in symbol:
                     continue
                 issues.append(
                     Issue(
