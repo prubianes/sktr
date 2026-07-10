@@ -1,6 +1,6 @@
 [project]
 name = "sktr"
-version = "0.12.0"
+version = "0.13.0"
 description = "System Knowledge & Technical Review"
 readme = "README.md"
 requires-python = ">=3.13"

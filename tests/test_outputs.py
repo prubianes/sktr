@@ -3,7 +3,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from typer.testing import CliRunner
+
+from sktr_cli.main import app
 from sktr_core.model import (
+    AIAdvice,
+    AIAdviceItem,
+    AIReview,
     FileChange,
     Issue,
     IssueCategory,
@@ -12,6 +18,8 @@ from sktr_core.model import (
     ReviewResult,
 )
 from sktr_report import JsonOutput, MarkdownOutput, TerminalOutput, output_for_format
+
+runner = CliRunner()
 
 
 def test_output_selection_returns_requested_output() -> None:
@@ -88,31 +96,22 @@ def test_markdown_output_snapshot() -> None:
             "| M | controllers/order_controller.py |",
             "| A | services/order_service.py |",
             "",
-            "## Issues",
+            "## Findings",
             "### High",
-            "#### Forbidden dependency",
-            "`controllers/order_controller.py` imports `repositories/order_repository.py`.",
-            "Reason: Controllers should access repositories through services.",
+            "- **Forbidden dependency**",
+            "  `controllers/order_controller.py` imports `repositories/order_repository.py`.",
+            "  Reason: Controllers should access repositories through services.",
             "### Medium",
-            "#### Large function",
-            "`create_order` has 114 lines.",
+            "- **Large function**",
+            "  `create_order` has 114 lines.",
             "",
-            "## Issues by Category",
+            "## Findings by Category",
             "| Category | Issues | Highest severity | Affected files | Rules |",
             "|---|---:|---|---|---|",
             "| Architecture | 1 | High | `controllers/order_controller.py` | architecture.forbidden_dependency |",
             "| Maintainability | 1 | Medium | - | symbol.large_function |",
             "",
-            "## Architecture Findings",
-            "### Forbidden dependency",
-            "`controllers/order_controller.py` imports `repositories/order_repository.py`.",
-            "Reason: Controllers should access repositories through services.",
-            "",
-            "## Maintainability Findings",
-            "### Large function",
-            "`create_order` has 114 lines.",
-            "",
-            "## Suggestions",
+            "## Suggested Actions",
             "- Consider extracting validation, payment handling and persistence.",
             "- Route the dependency through the configured boundary instead of importing it directly.",
             "",
@@ -123,6 +122,85 @@ def test_markdown_output_snapshot() -> None:
             "Repository root: /repo",
         ]
     )
+
+
+def test_human_outputs_share_sections_and_group_repeated_findings() -> None:
+    dependencies = [
+        Issue(
+            id=f"dependency.new:src/service.py:target_{index}",
+            title="New dependency detected",
+            description=f"src/service.py imports target_{index}.",
+            severity=IssueSeverity.INFO,
+            category=IssueCategory.COUPLING,
+            rule_id="dependency.new",
+            metadata={
+                "rule_key": "new_dependency",
+                "rule_name": "New dependency detected",
+                "source": "src/service.py",
+                "target": f"target_{index}",
+            },
+        )
+        for index in range(5)
+    ]
+    result = ReviewResult(
+        status="foundation ready",
+        context=ReviewContext(
+            file_changes=[FileChange(path="src/service.py", status="modified")],
+            metadata={"review_scope": "working_tree", "repository_root": "/repo"},
+        ),
+        issues=dependencies,
+        messages=["No AI provider configured yet."],
+    )
+
+    terminal = TerminalOutput().render(result)
+    markdown = MarkdownOutput().render(result)
+
+    for terminal_section, markdown_section in [
+        ("[bold]Summary[/bold]", "## Summary"),
+        ("[bold]Changed Files[/bold]", "## Changed Files"),
+        ("[bold]Findings[/bold]", "## Findings"),
+        ("[bold]Findings by Category[/bold]", "## Findings by Category"),
+        ("[bold]Notes[/bold]", "## Notes"),
+        ("[bold]Metadata[/bold]", "## Metadata"),
+    ]:
+        assert terminal_section in terminal
+        assert markdown_section in markdown
+
+    assert "New dependency detected (5 occurrences)" in terminal
+    assert "**New dependency detected** (5 occurrences)" in markdown
+    assert terminal.count("New dependency detected") == 1
+    assert markdown.count("New dependency detected") == 2  # finding plus rule name in category summary
+
+
+def test_report_command_renders_same_artifact_without_rerunning_ai(tmp_path: Path, monkeypatch) -> None:
+    result = ReviewResult(
+        status="foundation ready",
+        ai_review=AIReview(summary="Stable summary."),
+        ai_advice=AIAdvice(
+            provider="openai",
+            items=[
+                AIAdviceItem(
+                    title="Stable advice",
+                    why="The artifact is reused.",
+                    suggested_action="Render it in each required format.",
+                )
+            ],
+        ),
+    )
+    artifact = tmp_path / "review.json"
+    JsonOutput().write(result, str(artifact))
+    (tmp_path / "sktr.yml").write_text("project:\n  name: test\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    terminal = runner.invoke(app, ["report", str(artifact), "--format", "terminal"])
+    markdown = runner.invoke(app, ["report", str(artifact), "--format", "markdown"])
+
+    assert terminal.exit_code == 0
+    assert markdown.exit_code == 0
+    assert "Stable summary." in terminal.output
+    assert "Stable summary." in markdown.output
+    assert "Stable advice" in terminal.output
+    assert "Stable advice" in markdown.output
 
 
 def _review_result() -> ReviewResult:

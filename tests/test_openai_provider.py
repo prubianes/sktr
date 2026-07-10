@@ -5,6 +5,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from sktr_ai import OpenAIProvider, resolve_openai_api_key
+from sktr_ai.openai_provider import ResponsesAPIClient, _extract_output_text
 from sktr_cli.main import app
 from sktr_core.plugins import AIReviewContext
 
@@ -35,7 +36,7 @@ def test_sktr_openai_api_key_overrides_openai_api_key(monkeypatch) -> None:
     monkeypatch.setenv("SKTR_OPENAI_API_KEY", "sktr-secret")
     monkeypatch.setenv("OPENAI_API_KEY", "fallback-secret")
 
-    review = OpenAIProvider(model="gpt-5-mini").review(AIReviewContext())
+    review = OpenAIProvider(model="gpt-5-mini", client=_FakeClient("Summary")).review(AIReviewContext())
 
     assert review.metadata["api_key_source"] == "SKTR_OPENAI_API_KEY"
     assert review.model == "gpt-5-mini"
@@ -53,6 +54,37 @@ def test_missing_key_returns_a_warning(monkeypatch) -> None:
         "Set SKTR_OPENAI_API_KEY or OPENAI_API_KEY to enable AI summaries."
     ]
     assert review.metadata["api_key_status"] == "missing"
+
+
+def test_openai_timeout_becomes_a_provider_warning(monkeypatch) -> None:
+    monkeypatch.setenv("SKTR_OPENAI_API_KEY", "test-key")
+
+    def timeout(*args, **kwargs):
+        raise TimeoutError("The read operation timed out")
+
+    monkeypatch.setattr("sktr_ai.openai_provider.urlopen", timeout)
+
+    review = OpenAIProvider(client=ResponsesAPIClient()).review(AIReviewContext())
+
+    assert review.summary is None
+    assert review.warnings == ["OpenAI summary unavailable: OpenAI request could not be completed"]
+
+
+def test_responses_api_client_extracts_nested_output_text() -> None:
+    body = {
+        "status": "completed",
+        "output": [
+            {
+                "type": "message",
+                "content": [
+                    {"type": "output_text", "text": "First recommendation. "},
+                    {"type": "output_text", "text": "Second recommendation."},
+                ],
+            }
+        ],
+    }
+
+    assert _extract_output_text(body) == "First recommendation. Second recommendation."
 
 
 def test_ai_doctor_reports_source_without_printing_secret(monkeypatch) -> None:
@@ -92,3 +124,11 @@ class _isolated:
 
         os.chdir(self.previous)
         shutil.rmtree(self.path)
+
+
+class _FakeClient:
+    def __init__(self, response: str) -> None:
+        self.response = response
+
+    def generate(self, *, prompt: str, model: str, api_key: str) -> str:
+        return self.response

@@ -4,7 +4,7 @@ from typing import Protocol
 
 from pydantic import BaseModel, Field
 
-from sktr_core.model import AIReview, FileChange, Issue, ReviewContext, ReviewResult, System
+from sktr_core.model import AIAdvice, AIReview, FileChange, Issue, ReviewContext, ReviewResult, System
 
 
 class GitDiff(BaseModel):
@@ -24,6 +24,7 @@ class AIReviewContext(BaseModel):
     review: ReviewContext = Field(default_factory=ReviewContext)
     system: System = Field(default_factory=System)
     issues: list[Issue] = Field(default_factory=list)
+    ai_summary: AIReview | None = None
 
 
 class GitProvider(Protocol):
@@ -47,6 +48,8 @@ class Rule(Protocol):
 
 class AIProvider(Protocol):
     def review(self, context: AIReviewContext) -> AIReview: ...
+
+    def advise(self, context: AIReviewContext) -> AIAdvice: ...
 
 
 class Output(Protocol):

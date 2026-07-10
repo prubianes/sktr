@@ -40,12 +40,29 @@ class AIReview(BaseModel):
     metadata: dict[str, str] = Field(default_factory=dict)
 
 
+class AIAdviceItem(BaseModel):
+    title: str
+    why: str
+    suggested_action: str
+    related_issue_ids: list[str] = Field(default_factory=list)
+    related_files: list[str] = Field(default_factory=list)
+    confidence: str | None = None
+
+
+class AIAdvice(BaseModel):
+    provider: str
+    model: str | None = None
+    items: list[AIAdviceItem] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class ReviewResult(BaseModel):
     status: str
     context: ReviewContext = Field(default_factory=ReviewContext)
     system: System = Field(default_factory=System)
     issues: list[Issue] = Field(default_factory=list)
     ai_review: AIReview | None = None
+    ai_advice: AIAdvice | None = None
     knowledge_summary: dict[str, int] = Field(default_factory=dict)
     messages: list[str] = Field(default_factory=list)
     metadata: dict[str, object] = Field(default_factory=dict)

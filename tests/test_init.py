@@ -61,7 +61,7 @@ def test_init_recommended_defaults_prompt() -> None:
         assert result.exit_code == 0
         assert "Would you like to use the recommended SKTR defaults?" in result.output
         assert "✓ Using recommended defaults" in result.output
-        assert "Enable AI summaries?" in result.output
+        assert "Enable AI features (summary and advisor)?" in result.output
         assert "name: sample-app" in Path("sktr.yml").read_text(encoding="utf-8")
 
 

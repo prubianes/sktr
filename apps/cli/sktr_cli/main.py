@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import typer
+from pydantic import ValidationError
 
 from sktr_core.config import load_config
 from sktr_core.model import ReviewResult
 from sktr_core.pipeline import ReviewPipeline
 from sktr_core.plugins import MissingPluginError, PluginRegistry
-from sktr_ai import resolve_openai_api_key
+from sktr_ai import NullAIProvider, resolve_openai_api_key
 from sktr_enrichment import KnowledgeEnrichmentEngine
 from sktr_graph import GraphBuilder, GraphLevel
 from sktr_git import ReviewScope, SubprocessGitProvider
@@ -38,6 +40,9 @@ ai:
   enabled: false
   provider: null
   model: null
+  features:
+    summary: true
+    advisor: true
 """
 
 DEFAULT_OUTPUTS = ["terminal", "markdown", "json", "mermaid"]
@@ -125,13 +130,51 @@ def review(
         "--commit",
         help="Review a commit against its parent.",
     ),
+    ai: bool | None = typer.Option(
+        None,
+        "--ai/--no-ai",
+        help="Enable or disable both AI summary and advisor for this review.",
+    ),
 ) -> None:
     """Analyze the current Git diff and produce an architecture-focused review."""
     config = _require_config()
     registry = PluginRegistry.discover()
     scope = _review_scope(branch=branch, base=base, commit=commit)
     base_branch = base or config.git.default_base_branch
-    result = _build_review_result(scope=scope, base_branch=base_branch, commit=commit, registry=registry)
+    result = _build_review_result(
+        scope=scope,
+        base_branch=base_branch,
+        commit=commit,
+        registry=registry,
+        ai_override=ai,
+    )
+    try:
+        selected_output = registry.require("output", output_format).plugin.create_output()
+    except MissingPluginError as error:
+        raise typer.BadParameter(str(error), param_hint="--format") from error
+    selected_output.write(result, str(output) if output is not None else None)
+
+
+@app.command()
+def report(
+    artifact: Path = typer.Argument(..., help="JSON review artifact to render."),
+    output: Path | None = typer.Option(None, "--output", "-o", help="Write output to a file instead of stdout."),
+    output_format: str = typer.Option(
+        "terminal",
+        "--format",
+        help="Output format: terminal, json, or markdown.",
+    ),
+) -> None:
+    """Render an existing review artifact without rerunning Git, rules, or AI."""
+    _require_config()
+    try:
+        payload = json.loads(artifact.read_text(encoding="utf-8"))
+        result_payload = payload.get("review_result", payload)
+        result = ReviewResult.model_validate(result_payload)
+    except (OSError, json.JSONDecodeError, ValidationError, AttributeError) as error:
+        raise typer.BadParameter(f"Invalid SKTR review artifact: {error}", param_hint="artifact") from error
+
+    registry = PluginRegistry.discover()
     try:
         selected_output = registry.require("output", output_format).plugin.create_output()
     except MissingPluginError as error:
@@ -221,6 +264,8 @@ def ai_doctor() -> None:
         return
 
     typer.echo(f"AI provider: {provider}")
+    if config.ai.model:
+        typer.echo(f"AI model: {config.ai.model}")
     if provider not in {"openai", "sktr-openai"}:
         typer.echo("API key: not checked for this provider")
         return
@@ -248,6 +293,7 @@ def _build_review_result(
     base_branch: str,
     commit: str | None,
     registry: PluginRegistry | None = None,
+    ai_override: bool | None = None,
 ) -> ReviewResult:
     config = _require_config()
     plugin_registry = registry or PluginRegistry.discover()
@@ -260,11 +306,15 @@ def _build_review_result(
         for name in config.plugins.rules
         for rule in plugin_registry.require("rules", name).plugin.create_rules(config.rules)
     ]
+    run_ai_summary, run_ai_advice = _ai_features(config, ai_override)
     ai_provider = None
-    if config.ai.enabled and config.ai.provider:
-        ai_provider = plugin_registry.require("ai_provider", config.ai.provider).plugin.create_ai_provider(
-            model=config.ai.model
-        )
+    if run_ai_summary or run_ai_advice:
+        if config.ai.enabled and config.ai.provider:
+            ai_provider = plugin_registry.require("ai_provider", config.ai.provider).plugin.create_ai_provider(
+                model=config.ai.model
+            )
+        else:
+            ai_provider = NullAIProvider()
     git_diff = SubprocessGitProvider(
         scope=scope,
         base_branch=base_branch,
@@ -276,6 +326,8 @@ def _build_review_result(
         enrichment_engine=KnowledgeEnrichmentEngine.default(),
         rules=rules,
         ai_provider=ai_provider,
+        run_ai_summary=run_ai_summary,
+        run_ai_advice=run_ai_advice,
     )
     return pipeline.run()
 
@@ -310,6 +362,16 @@ def _configured_plugins(config) -> dict[str, list[str]]:
     return configured
 
 
+def _ai_features(config, override: bool | None) -> tuple[bool, bool]:
+    if override is False:
+        return False, False
+    if override is True:
+        return True, True
+    if not config.ai.enabled:
+        return False, False
+    return config.ai.features.summary, config.ai.features.advisor
+
+
 def _print_init_header() -> None:
     typer.echo()
     typer.secho("◆ SKTR Init", fg=typer.colors.CYAN, bold=True)
@@ -323,7 +385,7 @@ def _print_default_choices() -> None:
     typer.echo("Default base: main")
     typer.echo("Plugins: sktr-python, sktr-rules-default")
     typer.echo("Outputs: terminal, markdown, json, mermaid")
-    typer.echo("AI summaries: disabled")
+    typer.echo("AI features: disabled")
     typer.echo()
 
 
@@ -346,11 +408,12 @@ def _print_init_success(
     typer.echo("Next steps:")
     typer.echo("  sktr plugins doctor")
     typer.echo("  sktr review")
+    typer.echo("  sktr review --ai")
     typer.echo("  sktr review --format markdown --output REVIEW.md")
 
 
 def _prompt_ai_configuration() -> tuple[bool, str | None, str | None]:
-    if not typer.confirm("Enable AI summaries?", default=False):
+    if not typer.confirm("Enable AI features (summary and advisor)?", default=False):
         return False, None, None
 
     typer.secho("API keys stay in your environment and are never written to sktr.yml.", fg=typer.colors.CYAN)
@@ -396,4 +459,7 @@ ai:
   enabled: {str(ai_enabled).lower()}
   provider: {ai_provider or 'null'}
   model: {ai_model or 'null'}
+  features:
+    summary: true
+    advisor: true
 """

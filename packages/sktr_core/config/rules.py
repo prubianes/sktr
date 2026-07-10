@@ -33,10 +33,16 @@ class PluginsConfig(BaseModel):
     ai_providers: list[str] = Field(default_factory=list)
 
 
+class AIFeaturesConfig(BaseModel):
+    summary: bool = True
+    advisor: bool = True
+
+
 class AIConfig(BaseModel):
     enabled: bool = False
     provider: str | None = None
     model: str | None = None
+    features: AIFeaturesConfig = Field(default_factory=AIFeaturesConfig)
 
 
 class ForbiddenDependency(BaseModel):
@@ -121,13 +127,34 @@ def _load_simple_yaml(path: Path) -> dict[str, object]:
                 data.setdefault(section, {})
             continue
 
-        if section in {"project", "git", "review", "ai"}:
+        if section in {"project", "git", "review"}:
             key, value = _yaml_key_value(stripped)
             if key is None:
                 continue
             section_data = data.setdefault(section, {})
             assert isinstance(section_data, dict)
             section_data[key] = _coerce_scalar(value)
+            continue
+
+        if section == "ai":
+            ai = data.setdefault("ai", {})
+            assert isinstance(ai, dict)
+            if indent == 2:
+                key, value = _yaml_key_value(stripped)
+                if key is None:
+                    continue
+                subsection = key
+                if key == "features" and not value:
+                    ai.setdefault(key, {})
+                else:
+                    ai[key] = _coerce_scalar(value)
+                continue
+            if subsection == "features":
+                key, value = _yaml_key_value(stripped)
+                if key:
+                    features = ai.setdefault("features", {})
+                    assert isinstance(features, dict)
+                    features[key] = _coerce_scalar(value)
             continue
 
         if section != "rules":

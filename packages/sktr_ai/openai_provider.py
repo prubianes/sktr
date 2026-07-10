@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 import os
+import json
 from dataclasses import dataclass
+from typing import Protocol
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
-from sktr_core.model import AIReview
+from sktr_ai.advisor import parse_advice_response
+from sktr_ai.prompts import build_advisor_prompt, build_summary_prompt
+from sktr_core.model import AIAdvice, AIReview
 from sktr_core.plugins import AIReviewContext, PluginMetadata
 
 MISSING_API_KEY_WARNING = (
@@ -16,6 +22,68 @@ MISSING_API_KEY_WARNING = (
 class OpenAIKeyResolution:
     value: str | None
     source: str | None
+
+
+class OpenAIResponseClient(Protocol):
+    def generate(self, *, prompt: str, model: str, api_key: str) -> str: ...
+
+
+class ResponsesAPIClient:
+    """Small standard-library client for the OpenAI Responses API."""
+
+    endpoint = "https://api.openai.com/v1/responses"
+
+    def generate(self, *, prompt: str, model: str, api_key: str) -> str:
+        payload = json.dumps({"model": model, "input": prompt}).encode("utf-8")
+        request = Request(
+            self.endpoint,
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=30) as response:
+                body = json.loads(response.read().decode("utf-8"))
+        except HTTPError as error:
+            raise RuntimeError(f"OpenAI request failed with HTTP {error.code}") from error
+        except (URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
+            raise RuntimeError("OpenAI request could not be completed") from error
+
+        output_text = _extract_output_text(body)
+        if output_text:
+            return output_text
+        status = body.get("status")
+        suffix = f" (status: {status})" if isinstance(status, str) else ""
+        raise RuntimeError(f"OpenAI response did not include output text{suffix}")
+
+
+def _extract_output_text(body: dict[str, object]) -> str | None:
+    """Support both the SDK convenience field and raw Responses API output items."""
+    direct_text = body.get("output_text")
+    if isinstance(direct_text, str) and direct_text:
+        return direct_text
+
+    output = body.get("output")
+    if not isinstance(output, list):
+        return None
+
+    parts: list[str] = []
+    for item in output:
+        if not isinstance(item, dict):
+            continue
+        content = item.get("content")
+        if not isinstance(content, list):
+            continue
+        for content_part in content:
+            if not isinstance(content_part, dict) or content_part.get("type") != "output_text":
+                continue
+            text = content_part.get("text")
+            if isinstance(text, str):
+                parts.append(text)
+    return "".join(parts) or None
 
 
 def resolve_openai_api_key(environ: dict[str, str] | None = None) -> OpenAIKeyResolution:
@@ -31,11 +99,16 @@ def resolve_openai_api_key(environ: dict[str, str] | None = None) -> OpenAIKeyRe
 class OpenAIProvider:
     """OpenAI integration foundation; model invocation will be added separately."""
 
-    def __init__(self, *, model: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        model: str | None = None,
+        client: OpenAIResponseClient | None = None,
+    ) -> None:
         self.model = model
+        self.client = client or ResponsesAPIClient()
 
     def review(self, context: AIReviewContext) -> AIReview:
-        del context
         key = resolve_openai_api_key()
         if key.value is None:
             return AIReview(
@@ -43,10 +116,48 @@ class OpenAIProvider:
                 model=self.model,
                 metadata={"provider": "openai", "api_key_status": "missing"},
             )
-        return AIReview(
-            model=self.model,
-            metadata={"provider": "openai", "api_key_source": key.source or "unknown"},
-        )
+        try:
+            summary = self.client.generate(
+                prompt=build_summary_prompt(context),
+                model=self._model(),
+                api_key=key.value,
+            )
+            return AIReview(
+                summary=summary,
+                model=self._model(),
+                metadata={"provider": "openai", "api_key_source": key.source or "unknown"},
+            )
+        except RuntimeError as error:
+            return AIReview(
+                model=self.model,
+                warnings=[f"OpenAI summary unavailable: {error}"],
+                metadata={"provider": "openai"},
+            )
+
+    def advise(self, context: AIReviewContext) -> AIAdvice:
+        key = resolve_openai_api_key()
+        if key.value is None:
+            return AIAdvice(
+                provider="openai",
+                model=self.model,
+                warnings=[MISSING_API_KEY_WARNING],
+            )
+        try:
+            response = self.client.generate(
+                prompt=build_advisor_prompt(context),
+                model=self._model(),
+                api_key=key.value,
+            )
+            return parse_advice_response(response=response, provider="openai", model=self._model())
+        except RuntimeError as error:
+            return AIAdvice(
+                provider="openai",
+                model=self.model,
+                warnings=[f"OpenAI advisor unavailable: {error}"],
+            )
+
+    def _model(self) -> str:
+        return self.model or "gpt-5-mini"
 
 
 class OpenAIProviderPlugin:

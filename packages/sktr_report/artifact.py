@@ -34,6 +34,7 @@ def review_result_to_artifact(result: ReviewResult) -> dict[str, Any]:
         "knowledge_summary": result.knowledge_summary,
         "knowledge_model_summary": knowledge_summary,
         "issues": [issue.model_dump(mode="json") for issue in result.issues],
+        "ai_advice": result.ai_advice.model_dump(mode="json") if result.ai_advice else None,
         "rules": rules,
         "rule_results": _rule_results(result),
         "score": score,
