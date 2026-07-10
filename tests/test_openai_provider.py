@@ -51,7 +51,7 @@ def test_missing_key_returns_a_warning(monkeypatch) -> None:
 
     assert review.warnings == [
         "OpenAI provider is configured, but no API key was found. "
-        "Set SKTR_OPENAI_API_KEY or OPENAI_API_KEY to enable AI Review."
+        "Set SKTR_OPENAI_API_KEY or OPENAI_API_KEY to enable AI features."
     ]
     assert review.metadata["api_key_status"] == "missing"
 
@@ -102,6 +102,23 @@ def test_ai_doctor_reports_source_without_printing_secret(monkeypatch) -> None:
     assert result.exit_code == 0
     assert "API key: found via SKTR_OPENAI_API_KEY" in result.output
     assert "do-not-print-this-secret" not in result.output
+
+
+def test_ai_doctor_missing_key_explains_resolution_without_printing_secrets(monkeypatch) -> None:
+    monkeypatch.delenv("SKTR_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    with _isolated(Path.cwd() / ".tmp-ai-doctor-missing-test"):
+        Path("sktr.yml").write_text(
+            "ai:\n  enabled: true\n  provider: openai\n",
+            encoding="utf-8",
+        )
+        result = runner.invoke(app, ["ai", "doctor"])
+
+    assert result.exit_code == 0
+    assert "API key: missing" in result.output
+    assert "SKTR_OPENAI_API_KEY or OPENAI_API_KEY" in result.output
+    assert "sktr ai doctor" in result.output
 
 
 class _isolated:

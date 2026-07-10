@@ -1,5 +1,6 @@
 from sktr_core.config.rules import (
     DEFAULT_ENABLED_RULES,
+    DEFAULT_EXCLUDES,
     AIConfig,
     ForbiddenDependency,
     FanOutConfig,
@@ -16,6 +17,7 @@ from sktr_core.config.rules import (
 
 __all__ = [
     "DEFAULT_ENABLED_RULES",
+    "DEFAULT_EXCLUDES",
     "AIConfig",
     "ForbiddenDependency",
     "FanOutConfig",

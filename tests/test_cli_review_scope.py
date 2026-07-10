@@ -69,7 +69,9 @@ def test_review_command_requires_config() -> None:
         result = runner.invoke(app, ["review"])
 
         assert result.exit_code == 1
-        assert "SKTR is not initialized" in result.output
+        assert "No SKTR config found" in result.output
+        assert "sktr init" in result.output
+        assert "--config path/to/sktr.yml" in result.output
 
 
 def test_progress_uses_spinner_only_for_interactive_terminal() -> None:

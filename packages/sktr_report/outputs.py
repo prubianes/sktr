@@ -6,7 +6,7 @@ from pathlib import Path
 
 from rich.console import Console
 
-from sktr_core.model import Issue, IssueSeverity, ReviewResult
+from sktr_core.model import AnalysisDiagnostic, Issue, IssueSeverity, ReviewResult
 from sktr_core.plugins import Output
 from sktr_report.artifact import review_result_to_json
 from sktr_report.summary import risk_level, risk_score
@@ -32,6 +32,7 @@ class TerminalOutput:
             f"Risk: {risk_level(score).title()}",
             f"Score: {score}/100",
             f"Changed files: {len(result.context.file_changes)}",
+            f"Excluded files: {len(result.context.excluded_files)}",
             f"Issues: {len(result.issues)}",
         ]
 
@@ -47,6 +48,10 @@ class TerminalOutput:
             lines.extend(self._findings_lines(result.issues))
             lines.extend(["", "[bold]Findings by Category[/bold]"])
             lines.extend(self._category_lines(result.issues))
+
+        if result.diagnostics:
+            lines.extend(["", "[bold]Analysis Diagnostics[/bold]"])
+            lines.extend(_terminal_diagnostic(diagnostic) for diagnostic in result.diagnostics)
 
         if result.ai_review is not None:
             lines.extend(self._ai_review_lines(result))
@@ -168,6 +173,7 @@ class MarkdownOutput:
             f"Risk: {risk.title()}  ",
             f"Score: {score}/100  ",
             f"Changed files: {len(result.context.file_changes)}  ",
+            f"Excluded files: {len(result.context.excluded_files)}  ",
             f"Issues: {len(result.issues)}",
         ]
 
@@ -188,6 +194,11 @@ class MarkdownOutput:
             lines.append("")
             lines.append("## Findings by Category")
             lines.extend(self._issues_by_category(result.issues))
+
+        if result.diagnostics:
+            lines.extend(["", "## Analysis Diagnostics", "| Severity | Analyzer | File | Message |", "|---|---|---|---|"])
+            for diagnostic in result.diagnostics:
+                lines.append(_markdown_diagnostic(diagnostic))
 
         if result.ai_review is not None:
             lines.append("")
@@ -383,6 +394,23 @@ def _terminal_issue_body(issue: Issue) -> list[str]:
         line_count = issue.metadata.get("line_count", "unknown")
         return [f"{symbol} has {line_count} lines."]
     return [issue.description]
+
+
+def _terminal_diagnostic(diagnostic: AnalysisDiagnostic) -> str:
+    line = f":{diagnostic.location.start_line}" if diagnostic.location and diagnostic.location.start_line else ""
+    return (
+        f"[{diagnostic.severity.value.upper()}] {diagnostic.file_path}{line} "
+        f"({diagnostic.analyzer}/{diagnostic.code}): {diagnostic.message}"
+    )
+
+
+def _markdown_diagnostic(diagnostic: AnalysisDiagnostic) -> str:
+    line = f":{diagnostic.location.start_line}" if diagnostic.location and diagnostic.location.start_line else ""
+    message = diagnostic.message.replace("|", "\\|").replace("\n", " ")
+    return (
+        f"| {diagnostic.severity.value.title()} | {diagnostic.analyzer} | "
+        f"`{diagnostic.file_path}{line}` | {message} |"
+    )
 
 
 def _suggestions(issues: list[Issue]) -> list[str]:

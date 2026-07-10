@@ -7,6 +7,8 @@ from typing import Any
 from sktr_core.model import ReviewResult, SourceFile
 from sktr_report.summary import risk_level, risk_score
 
+SCHEMA_VERSION = "0.1"
+
 
 def review_result_to_artifact(result: ReviewResult) -> dict[str, Any]:
     score = risk_score(result)
@@ -14,7 +16,7 @@ def review_result_to_artifact(result: ReviewResult) -> dict[str, Any]:
     knowledge_summary = _knowledge_model_summary(result)
     rules = _rules(result)
     return {
-        "schema_version": "0.1",
+        "schema_version": SCHEMA_VERSION,
         "metadata": {
             "tool": "sktr",
             "generated_at": str(result.metadata.get("generated_at", "unknown")),
@@ -31,9 +33,11 @@ def review_result_to_artifact(result: ReviewResult) -> dict[str, Any]:
         },
         "status": result.status,
         "changed_files": [change.model_dump(mode="json") for change in result.context.file_changes],
+        "excluded_files": result.context.excluded_files,
         "knowledge_summary": result.knowledge_summary,
         "knowledge_model_summary": knowledge_summary,
         "issues": [issue.model_dump(mode="json") for issue in result.issues],
+        "diagnostics": [diagnostic.model_dump(mode="json") for diagnostic in result.diagnostics],
         "ai_review": result.ai_review.model_dump(mode="json") if result.ai_review else None,
         "rules": rules,
         "rule_results": _rule_results(result),

@@ -25,6 +25,19 @@ class DependencyKind(StrEnum):
     UNKNOWN = "unknown"
 
 
+class DependencyScope(StrEnum):
+    INTERNAL = "internal"
+    EXTERNAL = "external"
+    STANDARD_LIBRARY = "standard_library"
+    UNKNOWN = "unknown"
+
+
+class DiagnosticSeverity(StrEnum):
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+
+
 class IssueSeverity(StrEnum):
     INFO = "info"
     LOW = "low"

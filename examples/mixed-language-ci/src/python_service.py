@@ -1,0 +1,2 @@
+def create_order(order_id: str) -> dict[str, str]:
+    return {"id": order_id}

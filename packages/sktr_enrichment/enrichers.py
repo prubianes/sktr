@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from sktr_core.model import Dependency, DependencyKind, Module, SourceFile, Symbol, System
+from pathlib import PurePosixPath
+
+from sktr_core.model import Dependency, DependencyKind, DependencyScope, Module, SourceFile, Symbol, System
 from sktr_core.plugins import GitDiff
 
 LARGE_FILE_CHANGED_LINES = 300
@@ -50,18 +52,20 @@ class SymbolMetricsEnricher:
 class DependencyEnricher:
     def enrich(self, system: System, diff: GitDiff) -> None:
         changed_paths = {change.path for change in diff.file_changes}
-        known_modules = {_module_from_path(source_file.path) for source_file in _source_files(system)}
+        known_modules = {_source_module(source_file) for source_file in _source_files(system)}
         for source_file in _source_files(system):
-            source_module = _module_from_path(source_file.path)
+            source_module = _source_module(source_file)
             baseline_dependencies = {
                 str(value) for value in source_file.metadata.get("baseline_dependencies", [])
             }
             current_dependencies = {dependency.target for dependency in source_file.dependencies}
             source_file.metadata["removed_dependencies"] = sorted(baseline_dependencies - current_dependencies)
             for dependency in source_file.dependencies:
-                target_module = _module_from_dependency(dependency)
+                target_module = dependency.target_module or _module_from_dependency(dependency)
                 cross_module = bool(target_module and source_module and target_module != source_module)
-                scope = str(dependency.metadata.get("scope", "unknown"))
+                scope = dependency.scope.value
+                if scope == DependencyScope.UNKNOWN.value:
+                    scope = str(dependency.metadata.get("scope", "unknown"))
                 dependency.metadata["metrics"] = {
                     "new_dependency": dependency.target not in baseline_dependencies,
                     "removed_dependency": False,
@@ -79,7 +83,7 @@ class ModuleEnricher:
         changed_paths = {change.path for change in diff.file_changes}
         for module in system.modules:
             module_files = module.files
-            module_names = {_module_from_path(source_file.path) for source_file in module_files}
+            module_names = {_source_module(source_file) for source_file in module_files}
             changed_files = [source_file for source_file in module_files if source_file.path in changed_paths]
             changed_symbols = [
                 symbol
@@ -89,7 +93,7 @@ class ModuleEnricher:
             incoming = 0
             outgoing = 0
             for source_file in _source_files(system):
-                source_module = _module_from_path(source_file.path)
+                source_module = _source_module(source_file)
                 for dependency in source_file.dependencies:
                     target_module = _dependency_metric(dependency, "target_module")
                     is_cross_module = bool(_dependency_metric(dependency, "cross_module_dependency"))
@@ -159,7 +163,7 @@ class PriorityEnricher:
 class SummaryEnricher:
     def enrich(self, system: System, diff: GitDiff) -> None:
         changed_modules = {
-            _module_from_path(source_file.path)
+            _source_module(source_file)
             for source_file in _source_files(system)
             if source_file.metadata.get("change_status") != "unchanged"
         }
@@ -219,7 +223,11 @@ def _module_from_path(path: str) -> str:
         parts = parts[1:]
     if not parts:
         return ""
-    return parts[0].removesuffix(".py")
+    return PurePosixPath(parts[0]).stem
+
+
+def _source_module(source_file: SourceFile) -> str:
+    return source_file.module or _module_from_path(source_file.path)
 
 
 def _module_from_dependency(dependency: Dependency) -> str:

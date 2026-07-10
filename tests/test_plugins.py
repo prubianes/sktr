@@ -16,6 +16,8 @@ def test_plugin_discovery_finds_builtin_plugins() -> None:
     registry = PluginRegistry.discover()
 
     assert registry.get("analyzer", "sktr-python") is not None
+    assert registry.get("analyzer", "sktr-javascript-typescript") is not None
+    assert registry.get("analyzer", "sktr-java") is not None
     assert registry.get("rules", "sktr-rules-default") is not None
     assert registry.get("output", "markdown") is not None
     assert registry.get("output", "mermaid") is not None
@@ -54,6 +56,8 @@ def test_plugins_doctor_reports_missing_plugin() -> None:
 
         assert result.exit_code == 1
         assert "Missing analyzer plugin: missing-analyzer" in result.output
+        assert "Install the missing plugins or update" in result.output
+        assert "sktr plugins list" in result.output
 
 
 def test_pipeline_construction_from_discovered_plugins() -> None:
@@ -74,7 +78,7 @@ def test_plugins_doctor_requires_config() -> None:
         result = runner.invoke(app, ["plugins", "doctor"])
 
         assert result.exit_code == 1
-        assert "SKTR is not initialized" in result.output
+        assert "No SKTR config found" in result.output
 
 
 class _isolated:

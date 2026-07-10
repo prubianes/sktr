@@ -43,6 +43,16 @@ def structured_review_context(context: AIReviewContext) -> dict[str, Any]:
             for module in context.system.modules
         ],
         "dependency_edges": dependency_edges,
+        "analysis_diagnostics": [
+            {
+                "analyzer": diagnostic.analyzer,
+                "file_path": diagnostic.file_path,
+                "severity": diagnostic.severity.value,
+                "code": diagnostic.code,
+                "message": diagnostic.message,
+            }
+            for diagnostic in context.system.diagnostics[:20]
+        ],
         "context_limits": {
             "changed_files_total": len(context.review.file_changes),
             "changed_files_included": min(len(context.review.file_changes), 100),

@@ -8,7 +8,13 @@ from sktr_core.plugins.contracts import (
     Output,
     Rule,
 )
-from sktr_core.plugins.discovery import MissingPluginError, PluginMetadata, PluginRecord, PluginRegistry
+from sktr_core.plugins.discovery import (
+    MissingPluginError,
+    PluginLoadError,
+    PluginMetadata,
+    PluginRecord,
+    PluginRegistry,
+)
 
 __all__ = [
     "AIProvider",
@@ -19,6 +25,7 @@ __all__ = [
     "GitProvider",
     "Output",
     "MissingPluginError",
+    "PluginLoadError",
     "PluginMetadata",
     "PluginRecord",
     "PluginRegistry",

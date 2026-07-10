@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import PurePosixPath
+
 from sktr_core.model import Dependency, DependencyKind, SourceFile, System
 from sktr_graph.model import Graph, GraphEdge, GraphLevel, GraphNode
 
@@ -14,7 +16,7 @@ class GraphBuilder:
 
     def _module_graph(self, system: System) -> Graph:
         source_files = _source_files(system)
-        known_modules = {_module_from_path(source_file.path) for source_file in source_files}
+        known_modules = {_source_module(source_file) for source_file in source_files}
         nodes = {
             module: GraphNode(id=module, label=module, level=GraphLevel.MODULE)
             for module in known_modules
@@ -23,11 +25,11 @@ class GraphBuilder:
         edges: set[tuple[str, str]] = set()
 
         for source_file in source_files:
-            source_module = _module_from_path(source_file.path)
+            source_module = _source_module(source_file)
             if not source_module:
                 continue
             for dependency in source_file.dependencies:
-                target_module = _module_from_dependency(dependency)
+                target_module = dependency.target_module or _module_from_dependency(dependency)
                 if not target_module or target_module == source_module or target_module not in nodes:
                     continue
                 edges.add((source_module, target_module))
@@ -48,7 +50,7 @@ class GraphBuilder:
 
         for source_file in source_files:
             for dependency in source_file.dependencies:
-                target_file = _file_from_dependency(dependency)
+                target_file = dependency.target_path
                 if not target_file or target_file == source_file.path or target_file not in known_files:
                     continue
                 edges.add((source_file.path, target_file))
@@ -69,7 +71,11 @@ def _module_from_path(path: str) -> str:
         parts = parts[1:]
     if not parts:
         return ""
-    return parts[0].removesuffix(".py")
+    return PurePosixPath(parts[0]).stem
+
+
+def _source_module(source_file: SourceFile) -> str:
+    return source_file.module or _module_from_path(source_file.path)
 
 
 def _module_from_dependency(dependency: Dependency) -> str:
@@ -81,16 +87,3 @@ def _module_from_dependency(dependency: Dependency) -> str:
     if "/" in target:
         return _module_from_path(target)
     return target.split(".", 1)[0]
-
-
-def _file_from_dependency(dependency: Dependency) -> str:
-    if dependency.kind != DependencyKind.IMPORT:
-        return ""
-    target = dependency.target.strip(".")
-    if not target:
-        return ""
-    if target.endswith(".py"):
-        return target
-    if "/" in target:
-        return f"{target}.py"
-    return f"{target.replace('.', '/')}.py"

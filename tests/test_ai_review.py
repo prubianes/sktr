@@ -149,10 +149,10 @@ def test_ai_config_rejects_inconsistent_enabled_state(tmp_path: Path) -> None:
 
 
 def test_cli_ai_and_no_ai_select_expected_override(monkeypatch) -> None:
-    calls: list[bool | None] = []
+    calls: list[tuple[bool | None, str | None]] = []
 
     def build(**kwargs) -> ReviewResult:
-        calls.append(kwargs["ai_override"])
+        calls.append((kwargs["ai_override"], kwargs["model_override"]))
         return ReviewResult(status="foundation ready")
 
     monkeypatch.setattr(cli_main, "_build_review_result", build)
@@ -160,10 +160,12 @@ def test_cli_ai_and_no_ai_select_expected_override(monkeypatch) -> None:
         Path("sktr.yml").write_text("project:\n  name: test\n", encoding="utf-8")
         enabled = runner.invoke(cli_main.app, ["review", "--ai"])
         disabled = runner.invoke(cli_main.app, ["review", "--no-ai"])
+        selected_model = runner.invoke(cli_main.app, ["review", "--ai", "--model", "gpt-5-mini"])
 
     assert enabled.exit_code == 0
     assert disabled.exit_code == 0
-    assert calls == [True, False]
+    assert selected_model.exit_code == 0
+    assert calls == [(True, None), (False, None), (True, "gpt-5-mini")]
 
 
 def test_outputs_and_artifact_use_single_ai_review() -> None:

@@ -1,68 +1,135 @@
 # SKTR
 
-SKTR means System Knowledge & Technical Review.
+**System Knowledge & Technical Review**
 
-The first product goal is a Python CLI command:
+Understand your software before you change it.
+
+SKTR is a language-agnostic software intelligence CLI. It turns Git changes into
+a structured knowledge model, enriches that model with deterministic engineering
+metrics, applies architecture rules, and produces review artifacts for people and
+automation. Optional AI features explain the evidence; they do not replace it.
+
+## What is SKTR?
+
+Run `sktr review` inside a configured Git repository to answer practical review
+questions:
+
+- Which modules and public symbols changed?
+- Did this change introduce new internal dependencies or dependency cycles?
+- Which files and functions deserve attention first?
+- Does the change violate a configured architecture boundary?
+- What structured artifact can CI, reports, and future tooling consume?
+
+The core is language-agnostic. Python, JavaScript/TypeScript, and Java analyzers,
+rule packs, outputs, and AI providers are discovered as plugins through Python
+entry points.
+
+## Why SKTR?
+
+Code review tools often begin with raw source and ask a model to discover what
+matters. SKTR begins with deterministic facts. Git scope, symbols, dependencies,
+metrics, rules, risk, and review priority are computed first. AI features receive
+that structured context instead of the whole repository.
+
+SKTR remains useful with AI disabled, produces stable output, and stores the
+result as a versioned JSON artifact rather than only printing prose.
+
+## Features
+
+- Working-tree, branch, explicit-base, and commit review scopes
+- Python analysis using the standard `ast` module
+- JavaScript, JSX, TypeScript, TSX, and Java analysis using Tree-sitter
+- Deterministic architecture and maintainability rules
+- Configurable forbidden module dependencies and thresholds
+- Knowledge enrichment with file, symbol, dependency, module, risk, and priority metrics
+- Terminal, Markdown, JSON, and Mermaid output
+- Plugin discovery and diagnostics
+- CI severity gates, path exclusions, and parse diagnostics
+- Optional OpenAI-powered explanations and recommendations
+
+## Quickstart
+
+SKTR requires Python 3.13 or newer and a Git repository.
 
 ```bash
+pip install sktr
+cd your-project
+sktr init --yes
 sktr review
 ```
 
-SKTR provides a language-agnostic core model, plugin contracts, deterministic
-knowledge enrichment, deterministic rules, review scopes, and pluggable outputs.
+Common next steps:
+
+```bash
+sktr review --ai
+sktr review --ai --model gpt-5-mini
+sktr review --format markdown --output REVIEW.md
+sktr review --format json --output sktr-review.json
+sktr graph --format mermaid --output architecture.mmd
+```
+
+See the [quickstart](docs/quickstart.md) for review scopes and a complete first run.
+
+## Example output
+
+```text
+SKTR Review
+
+Summary
+Risk: Medium
+Score: 76/100
+Changed files: 3
+Issues: 2
+
+Findings
+High
+! Forbidden dependency
+  controllers/order_controller.py imports repositories/order_repository.py
+  Reason: Controllers should access repositories through services.
+
+Medium
+! Large function detected
+  create_order has 114 lines.
+
+AI Review
+Overview
+The change crosses the controller-to-repository boundary and concentrates new
+order behavior in one large function.
+```
+
+AI output appears only when enabled. Deterministic findings and scoring are the
+same with or without AI.
 
 ## Configuration
 
-SKTR looks for `sktr.yml` or `sktr.yaml` in the current directory.
-
-Create a config interactively:
-
-```bash
-sktr init
-```
-
-Create the default config without prompts:
-
-```bash
-sktr init --yes
-```
-
-Use a preset:
-
-```bash
-sktr init --preset recommended
-sktr init --preset minimal
-sktr init --preset custom
-```
-
-Enable the default installed AI provider in non-interactive setup:
-
-```bash
-sktr init --yes --ai
-```
-
-Preview the detected project and generated YAML without writing a file:
-
-```bash
-sktr init --yes --dry-run
-```
-
-Interactive setup detects project metadata and installed plugins, provides
-arrow-key menus and checkbox selection, previews the final configuration, and
-validates plugin capabilities before writing `sktr.yml`. API keys remain in
-environment variables and are never written to configuration.
-
-Overwrite an existing config:
-
-```bash
-sktr init --force
-```
-
-Example `sktr.yml`:
+`sktr init` creates `sktr.yml`. Use interactive setup to choose plugins, rules,
+outputs, and optional AI features, or use `sktr init --yes` for safe defaults.
 
 ```yaml
 project:
   name: sample-app
+  default_base: main
+review:
+  default_scope: working_tree
+  fail_on: null
+  exclude:
+    - node_modules/
+    - .venv/
+    - dist/
+    - build/
+    - target/
+plugins:
+  analyzers:
+    - sktr-python
+    - sktr-javascript-typescript
+    - sktr-java
+  rules:
+    - sktr-rules-default
+  outputs:
+    - terminal
+    - markdown
+    - json
+    - mermaid
 rules:
   enabled:
     - new_dependency
@@ -74,148 +141,80 @@ rules:
   large_function:
     max_lines: 80
   forbidden_dependencies:
-    - source: "controllers"
-      target: "repositories"
-      reason: "Controllers should access repositories through services."
+    - source: controllers
+      target: repositories
+      reason: Controllers should access repositories through services.
+ai:
+  enabled: false
 ```
 
-## Review Scopes
-
-By default, SKTR reviews the current working tree against `HEAD`:
-
-```bash
-sktr review
-```
-
-Review the current branch against the merge-base with the configured base branch:
-
-```bash
-sktr review --branch
-```
-
-Use an explicit base branch:
-
-```bash
-sktr review --base develop
-```
-
-Review one commit against its parent:
-
-```bash
-sktr review --commit HEAD~1
-```
-
-## Outputs
-
-Write terminal output to stdout:
-
-```bash
-sktr review --format terminal
-```
-
-Write JSON to stdout:
-
-```bash
-sktr review --format json
-```
-
-Write Markdown to stdout:
-
-```bash
-sktr review --format markdown
-```
-
-Write JSON or Markdown to a file:
-
-```bash
-sktr review --format json --output sktr-review.json
-sktr review --format markdown --output REVIEW.md
-```
-
-JSON output is the canonical SKTR analysis artifact. It includes schema version,
-metadata, repository info, summary score/risk, changed files, knowledge model
-summary, issues, executed rules, and backward-compatible review fields.
-
-Markdown output is a deterministic review document with a summary, risk score,
-changed-file table, grouped issues, architecture and maintainability findings,
-suggestions, and metadata.
+API keys never belong in this file. See the complete
+[configuration reference](docs/configuration.md).
 
 ### Risk score
 
-The score starts at 100 and deterministic findings subtract severity-weighted
-penalties. Repeated findings from the same rule and category are capped so a
-large diff cannot reach zero through repetition alone. Informational findings
-and the number of changed files do not reduce the score; changed-file count
-represents review effort, not architectural risk. Independent risk categories
-accumulate, while each category has its own cap.
+The score starts at 100. Deterministic findings subtract severity-weighted
+penalties, with caps for repeated findings and categories. Informational findings
+and changed-file count do not lower the score: scope size represents review
+effort, not architectural risk.
 
-Risk levels are low (85-100), medium (65-84), high (40-64), and critical
-(0-39).
+- Low: 85-100
+- Medium: 65-84
+- High: 40-64
+- Critical: 0-39
 
-## Knowledge Enrichment
+## AI features
 
-Before rules run, SKTR enriches the Knowledge Model with deterministic engineering
-metadata:
-
-- file, symbol, dependency, and module metrics
-- risk indicators
-- review priority
-- knowledge summary
-
-Rules and future AI providers consume this enriched model instead of raw parser
-data.
-
-## Graphs
-
-Generate a Mermaid dependency graph from the SKTR knowledge model:
+AI is optional. SKTR can ask a configured provider to explain deterministic
+findings and recommend focused next steps using structured SKTR context.
 
 ```bash
-sktr graph
-sktr graph --level module
-sktr graph --level file
-sktr graph --format mermaid --output architecture.mmd
+export SKTR_OPENAI_API_KEY="your-api-key"
+sktr ai doctor
+sktr review --ai
 ```
+
+OpenAI key resolution is `SKTR_OPENAI_API_KEY` first, then `OPENAI_API_KEY`.
+SKTR never stores or prints the key. See [AI setup](docs/ai.md).
 
 ## Plugins
 
-SKTR discovers plugins through Python entry points:
+SKTR discovers analyzers, rule packs, outputs, and AI providers from these entry
+point groups:
 
 - `sktr.analyzers`
 - `sktr.rules`
 - `sktr.outputs`
 - `sktr.ai_providers`
 
-List installed plugins:
-
 ```bash
 sktr plugins list
-```
-
-Validate configured plugins:
-
-```bash
 sktr plugins doctor
 ```
 
-## AI Review
+See the [plugin guide](docs/plugins.md) to build or distribute a plugin.
 
-SKTR can add one optional AI Review containing a concise overview and prioritized
-recommendations based only on structured deterministic findings.
+## Roadmap
 
-```yaml
-ai:
-  enabled: true
-  provider: openai
-  model: gpt-5-mini
+The v0.16-v0.18 roadmap delivered bundled JavaScript/TypeScript and Java
+analyzers, followed by CI severity gates, exclusions, parse diagnostics, and a
+frozen artifact schema. See the [canonical roadmap](docs/roadmap.md) for milestone
+deliverables and deferred post-v1 work.
+
+## Contributing
+
+Development uses `uv`:
+
+```bash
+uv sync
+uv run pytest
+uv run sktr review
 ```
 
-When disabled, the configuration is simply:
+Read [development.md](docs/development.md) before adding an analyzer, rule,
+output, or provider. Release work is tracked in the
+[v1.0 checklist](docs/release-checklist.md).
 
-```yaml
-ai:
-  enabled: false
-```
+## License
 
-Use `--ai` or `--no-ai` to override the configured behavior for one run. OpenAI
-credentials are resolved from `SKTR_OPENAI_API_KEY` and then `OPENAI_API_KEY`;
-keys are never stored in `sktr.yml`.
+SKTR is available under the [MIT License](LICENSE).

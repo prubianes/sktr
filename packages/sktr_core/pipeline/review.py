@@ -39,6 +39,7 @@ class ReviewPipeline:
         context = ReviewContext(
             changed_files=changed_files,
             file_changes=diff.file_changes,
+            excluded_files=diff.excluded_files,
             diff_summary=diff.raw if diff.raw else None,
             metadata={
                 **diff.metadata,
@@ -85,6 +86,7 @@ class ReviewPipeline:
             context=context,
             system=system,
             issues=issues,
+            diagnostics=system.diagnostics,
             ai_review=ai_review,
             knowledge_summary=_knowledge_summary(system),
             messages=messages,
@@ -93,9 +95,15 @@ class ReviewPipeline:
 
     def _merge_systems(self, systems: Sequence[System]) -> System:
         merged = System()
+        analyzer_names: list[str] = []
         for system in systems:
             merged.modules.extend(system.modules)
-            merged.metadata.update(system.metadata)
+            merged.diagnostics.extend(system.diagnostics)
+            analyzer = system.metadata.get("analyzer")
+            if isinstance(analyzer, str):
+                analyzer_names.append(analyzer)
+            merged.metadata.update({key: value for key, value in system.metadata.items() if key != "analyzer"})
+        merged.metadata["analyzers"] = analyzer_names
         return merged
 
 

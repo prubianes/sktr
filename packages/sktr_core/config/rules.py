@@ -4,6 +4,7 @@ from pathlib import Path
 import tomllib
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from sktr_core.model import IssueSeverity
 
 DEFAULT_ENABLED_RULES = [
     "new_dependency",
@@ -14,6 +15,18 @@ DEFAULT_ENABLED_RULES = [
     "high_fan_out",
     "public_api_change",
     "missing_tests",
+]
+
+DEFAULT_EXCLUDES = [
+    "node_modules/",
+    ".venv/",
+    "venv/",
+    "dist/",
+    "build/",
+    "target/",
+    "coverage/",
+    "*.min.js",
+    "*.generated.*",
 ]
 
 
@@ -28,10 +41,14 @@ class GitConfig(BaseModel):
 
 class ReviewConfig(BaseModel):
     default_scope: str = "working_tree"
+    fail_on: IssueSeverity | None = None
+    exclude: list[str] = Field(default_factory=lambda: DEFAULT_EXCLUDES.copy())
 
 
 class PluginsConfig(BaseModel):
-    analyzers: list[str] = Field(default_factory=lambda: ["sktr-python"])
+    analyzers: list[str] = Field(
+        default_factory=lambda: ["sktr-python", "sktr-javascript-typescript", "sktr-java"]
+    )
     rules: list[str] = Field(default_factory=lambda: ["sktr-rules-default"])
     outputs: list[str] = Field(default_factory=lambda: ["terminal", "markdown", "json", "mermaid"])
     ai_providers: list[str] = Field(default_factory=list)
@@ -140,13 +157,29 @@ def _load_simple_yaml(path: Path) -> dict[str, object]:
                 data.setdefault(section, {})
             continue
 
-        if section in {"project", "git", "review"}:
+        if section in {"project", "git"}:
             key, value = _yaml_key_value(stripped)
             if key is None:
                 continue
             section_data = data.setdefault(section, {})
             assert isinstance(section_data, dict)
             section_data[key] = _coerce_scalar(value)
+            continue
+
+        if section == "review":
+            review = data.setdefault("review", {})
+            assert isinstance(review, dict)
+            if indent == 2:
+                key, value = _yaml_key_value(stripped)
+                if key is None:
+                    continue
+                subsection = key
+                review[key] = _coerce_scalar(value) if value else ([] if key == "exclude" else {})
+                continue
+            if subsection == "exclude" and stripped.startswith("- "):
+                values = review.setdefault("exclude", [])
+                assert isinstance(values, list)
+                values.append(_coerce_scalar(stripped[2:]))
             continue
 
         if section == "ai":

@@ -170,7 +170,7 @@ class ForbiddenDependencyRule:
                 violation = self._violation(dependency)
                 if violation is None:
                     continue
-                target_path = _target_path(dependency.target)
+                target_path = dependency.target_path or dependency.target
                 issues.append(
                     Issue(
                         id=f"{self.id}:{dependency.source}:{dependency.target}",
@@ -412,12 +412,6 @@ def _parts(value: str) -> set[str]:
     return {part for part in normalized.split("/") if part}
 
 
-def _target_path(target: str) -> str:
-    if target.endswith(".py"):
-        return target
-    return target.replace(".", "/") + ".py"
-
-
 def _metadata_dict(value: object) -> dict[str, object]:
     return value if isinstance(value, dict) else {}
 
@@ -426,7 +420,15 @@ def _is_test_path(path: str) -> bool:
     normalized_path = path.lower().replace("\\", "/")
     normalized = f"/{normalized_path}"
     name = normalized.rsplit("/", 1)[-1]
-    return "/tests/" in normalized or "/test/" in normalized or name.startswith("test_") or "_test." in name
+    return (
+        "/tests/" in normalized
+        or "/test/" in normalized
+        or "/src/test/" in normalized
+        or name.startswith("test_")
+        or "_test." in name
+        or ".test." in name
+        or name.endswith("test.java")
+    )
 
 
 def _dependency_cycles(graph: dict[str, set[str]]) -> list[list[str]]:

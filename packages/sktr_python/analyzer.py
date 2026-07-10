@@ -4,7 +4,19 @@ import ast
 import sys
 from pathlib import Path
 
-from sktr_core.model import Dependency, DependencyKind, Location, Module, SourceFile, Symbol, SymbolKind, System
+from sktr_core.model import (
+    AnalysisDiagnostic,
+    Dependency,
+    DependencyKind,
+    DependencyScope,
+    DiagnosticSeverity,
+    Location,
+    Module,
+    SourceFile,
+    Symbol,
+    SymbolKind,
+    System,
+)
 from sktr_core.plugins import AnalysisContext
 
 
@@ -18,6 +30,7 @@ class PythonAstAnalyzer:
         root = self._root(context)
         changed_files = context.review.changed_files or context.diff.changed_files
         files: list[SourceFile] = []
+        diagnostics: list[AnalysisDiagnostic] = []
         for path in changed_files:
             if not path.endswith(".py"):
                 continue
@@ -27,9 +40,32 @@ class PythonAstAnalyzer:
             baseline_source = context.diff.base_file_contents.get(path)
             if current_source is None and baseline_source is None:
                 continue
-            source_file = self._analyze_file(path, current_source, baseline_source)
+            try:
+                source_file = self._analyze_file(path, current_source, baseline_source)
+            except SyntaxError as error:
+                diagnostics.append(
+                    AnalysisDiagnostic(
+                        analyzer=self.__class__.__name__,
+                        file_path=path,
+                        severity=DiagnosticSeverity.ERROR,
+                        code="parse_error",
+                        message=error.msg,
+                        location=Location(
+                            file_path=path,
+                            start_line=error.lineno,
+                            start_column=error.offset,
+                        ) if error.lineno else None,
+                    )
+                )
+                continue
+            source_module = self._module_for_path(path)
+            source_file.module = source_module
             for dependency in source_file.dependencies:
-                dependency.metadata["scope"] = self._dependency_scope(root, dependency.target)
+                dependency.scope = self._dependency_scope(root, dependency.target)
+                dependency.source_module = source_module
+                dependency.target_module = self._target_module(dependency.target, source_module)
+                dependency.target_path = self._target_path(root, dependency.target)
+                dependency.metadata["scope"] = dependency.scope.value
             files.append(source_file)
 
         return System(
@@ -43,6 +79,7 @@ class PythonAstAnalyzer:
             ]
             if files
             else [],
+            diagnostics=diagnostics,
             metadata={"analyzer": self.__class__.__name__},
         )
 
@@ -129,20 +166,38 @@ class PythonAstAnalyzer:
             location=self._location(relative_path, node),
         )
 
-    def _dependency_scope(self, root: Path, target: str) -> str:
+    def _dependency_scope(self, root: Path, target: str) -> DependencyScope:
         if target.startswith("."):
-            return "internal"
+            return DependencyScope.INTERNAL
         top_level = target.split(".", 1)[0]
         if top_level in sys.stdlib_module_names:
-            return "standard_library"
+            return DependencyScope.STANDARD_LIBRARY
         search_roots = (root, root / "src", root / "app", root / "lib", root / "packages")
         if any(
             (search_root / f"{top_level}.py").is_file()
             or (search_root / top_level / "__init__.py").is_file()
             for search_root in search_roots
         ):
-            return "internal"
-        return "external"
+            return DependencyScope.INTERNAL
+        return DependencyScope.EXTERNAL
+
+    def _module_for_path(self, path: str) -> str:
+        parts = [part for part in Path(path).parts if part not in {"src", "app", "lib", "packages"}]
+        return parts[0].removesuffix(".py") if parts else ""
+
+    def _target_module(self, target: str, source_module: str) -> str:
+        normalized = target.strip(".")
+        return normalized.split(".", 1)[0] if normalized else source_module
+
+    def _target_path(self, root: Path, target: str) -> str | None:
+        if target.startswith("."):
+            return None
+        relative = Path(*target.split("."))
+        for search_root in (root, root / "src", root / "app", root / "lib", root / "packages"):
+            for candidate in (search_root / relative.with_suffix(".py"), search_root / relative / "__init__.py"):
+                if candidate.is_file():
+                    return candidate.relative_to(root).as_posix()
+        return None
 
     def _location(self, relative_path: str, node: ast.AST) -> Location:
         return Location(

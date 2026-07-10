@@ -2,8 +2,11 @@
 
 from sktr_core.model import (
     AIReview,
+    AnalysisDiagnostic,
     Dependency,
     DependencyKind,
+    DependencyScope,
+    DiagnosticSeverity,
     FileChange,
     Issue,
     IssueCategory,
@@ -17,11 +20,15 @@ from sktr_core.model import (
     SymbolKind,
     System,
 )
+from sktr_core.version import SKTR_VERSION
 
 __all__ = [
     "AIReview",
+    "AnalysisDiagnostic",
     "Dependency",
     "DependencyKind",
+    "DependencyScope",
+    "DiagnosticSeverity",
     "FileChange",
     "Issue",
     "IssueCategory",
@@ -34,4 +41,5 @@ __all__ = [
     "Symbol",
     "SymbolKind",
     "System",
+    "SKTR_VERSION",
 ]

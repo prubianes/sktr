@@ -1,6 +1,7 @@
 from sktr_rules.registry import RuleRegistry
 from sktr_core.config import RuleConfig
 from sktr_core.plugins import PluginMetadata
+from sktr_core.version import SKTR_VERSION
 from sktr_rules.rules import (
     ForbiddenDependencyRule,
     DependencyCycleRule,
@@ -19,7 +20,7 @@ class DefaultRulesPlugin:
     def metadata(self) -> PluginMetadata:
         return PluginMetadata(
             name="sktr-rules-default",
-            version="0.15.0",
+            version=SKTR_VERSION,
             type="rules",
             description="Default deterministic SKTR rules.",
         )

@@ -40,7 +40,7 @@ def test_graph_command_requires_config() -> None:
         result = runner.invoke(cli_main.app, ["graph"])
 
         assert result.exit_code == 1
-        assert "SKTR is not initialized" in result.output
+        assert "No SKTR config found" in result.output
 
 
 def _fake_review_result(**kwargs) -> ReviewResult:

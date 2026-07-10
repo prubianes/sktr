@@ -1,13 +1,14 @@
 from sktr_report.artifact import review_result_to_artifact, review_result_to_json, write_review_artifact
 from sktr_report.outputs import JsonOutput, MarkdownOutput, TerminalOutput, output_for_format
 from sktr_core.plugins import PluginMetadata
+from sktr_core.version import SKTR_VERSION
 
 
 class TerminalOutputPlugin:
     def metadata(self) -> PluginMetadata:
         return PluginMetadata(
             name="terminal",
-            version="0.15.0",
+            version=SKTR_VERSION,
             type="output",
             description="Terminal review output.",
         )
@@ -20,7 +21,7 @@ class MarkdownOutputPlugin:
     def metadata(self) -> PluginMetadata:
         return PluginMetadata(
             name="markdown",
-            version="0.15.0",
+            version=SKTR_VERSION,
             type="output",
             description="Markdown review document output.",
         )
@@ -33,7 +34,7 @@ class JsonOutputPlugin:
     def metadata(self) -> PluginMetadata:
         return PluginMetadata(
             name="json",
-            version="0.15.0",
+            version=SKTR_VERSION,
             type="output",
             description="Canonical JSON review artifact output.",
         )

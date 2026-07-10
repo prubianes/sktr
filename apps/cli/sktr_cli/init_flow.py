@@ -14,7 +14,7 @@ import typer
 from questionary import Choice, Style
 
 from sktr_ai import resolve_openai_api_key
-from sktr_core.config import DEFAULT_ENABLED_RULES
+from sktr_core.config import DEFAULT_ENABLED_RULES, DEFAULT_EXCLUDES
 from sktr_core.plugins import PluginRegistry
 
 DEFAULT_OUTPUTS = ["terminal", "markdown", "json", "mermaid"]
@@ -271,6 +271,8 @@ def render_config(answers: InitAnswers) -> str:
   default_base: {answers.default_base}
 review:
   default_scope: working_tree
+  fail_on: null
+  exclude:{_yaml_list(DEFAULT_EXCLUDES)}
 plugins:
   analyzers:{_yaml_list(answers.analyzers)}
   rules:{_yaml_list(answers.rules)}
@@ -375,7 +377,13 @@ def _ordered_output_names(registry: PluginRegistry) -> list[str]:
 def _yaml_list(values: list[str]) -> str:
     if not values:
         return " []"
-    return "\n" + "\n".join(f"    - {value}" for value in values)
+    return "\n" + "\n".join(f"    - {_yaml_scalar(value)}" for value in values)
+
+
+def _yaml_scalar(value: str) -> str:
+    if value.startswith(("*", "!", "&")) or ": " in value or " #" in value:
+        return json.dumps(value)
+    return value
 
 
 def _ai_details(answers: InitAnswers) -> str:

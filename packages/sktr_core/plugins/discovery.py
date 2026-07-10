@@ -29,18 +29,37 @@ class PluginRecord:
     plugin: Any
 
 
+@dataclass(frozen=True)
+class PluginLoadError:
+    entry_point_name: str
+    group: str
+    message: str
+
+
 class PluginRegistry:
-    def __init__(self, records: list[PluginRecord]) -> None:
+    def __init__(self, records: list[PluginRecord], load_errors: list[PluginLoadError] | None = None) -> None:
         self.records = records
+        self.load_errors = load_errors or []
 
     @classmethod
     def discover(cls) -> "PluginRegistry":
         records: list[PluginRecord] = []
+        load_errors: list[PluginLoadError] = []
         discovered = entry_points()
         for plugin_type, group in PLUGIN_GROUPS.items():
             for entry_point in discovered.select(group=group):
-                plugin = entry_point.load()()
-                metadata = plugin.metadata()
+                try:
+                    plugin = entry_point.load()()
+                    metadata = plugin.metadata()
+                except Exception as error:
+                    load_errors.append(
+                        PluginLoadError(
+                            entry_point_name=entry_point.name,
+                            group=group,
+                            message=str(error) or error.__class__.__name__,
+                        )
+                    )
+                    continue
                 if metadata.type != plugin_type:
                     metadata = metadata.model_copy(update={"type": plugin_type})
                 records.append(
@@ -51,7 +70,7 @@ class PluginRegistry:
                         plugin=plugin,
                     )
                 )
-        return cls(records)
+        return cls(records, load_errors)
 
     def by_type(self, plugin_type: str) -> list[PluginRecord]:
         return [record for record in self.records if record.metadata.type == plugin_type]
@@ -69,7 +88,10 @@ class PluginRegistry:
         return record
 
     def validate_configured(self, configured: dict[str, list[str]]) -> list[str]:
-        errors: list[str] = []
+        errors = [
+            f"Plugin {error.entry_point_name} could not be loaded from {error.group}: {error.message}"
+            for error in self.load_errors
+        ]
         for plugin_type, names in configured.items():
             for name in names:
                 record = self.get(plugin_type, name)

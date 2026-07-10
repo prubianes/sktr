@@ -135,7 +135,7 @@ def test_forbidden_dependency_rule_reports_direct_import_between_configured_modu
     assert len(issues) == 1
     assert issues[0].title == "Forbidden dependency"
     assert issues[0].metadata["source"] == "controllers/order_controller.py"
-    assert issues[0].metadata["target"] == "repositories/order_repository.py"
+    assert issues[0].metadata["target"] == "repositories.order_repository"
     assert issues[0].metadata["rule_key"] == "forbidden_dependency"
     assert issues[0].metadata["reason"] == "Controllers should access repositories through services."
 

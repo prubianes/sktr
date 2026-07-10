@@ -11,10 +11,11 @@ from sktr_ai.prompts import build_ai_review_prompt
 from sktr_ai.review import parse_ai_review_response
 from sktr_core.model import AIReview
 from sktr_core.plugins import AIReviewContext, PluginMetadata
+from sktr_core.version import SKTR_VERSION
 
 MISSING_API_KEY_WARNING = (
     "OpenAI provider is configured, but no API key was found. "
-    "Set SKTR_OPENAI_API_KEY or OPENAI_API_KEY to enable AI Review."
+    "Set SKTR_OPENAI_API_KEY or OPENAI_API_KEY to enable AI features."
 )
 
 
@@ -145,7 +146,7 @@ class OpenAIProviderPlugin:
     def metadata(self) -> PluginMetadata:
         return PluginMetadata(
             name="openai",
-            version="0.15.0",
+            version=SKTR_VERSION,
             type="ai_provider",
             description="OpenAI AI review provider.",
         )

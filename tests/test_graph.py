@@ -61,11 +61,13 @@ def _system() -> System:
                             Dependency(
                                 source="orders/service.py",
                                 target="payments.client",
+                                target_path="payments/client.py",
                                 kind=DependencyKind.IMPORT,
                             ),
                             Dependency(
                                 source="orders/service.py",
                                 target="payments.client",
+                                target_path="payments/client.py",
                                 kind=DependencyKind.IMPORT,
                             ),
                             Dependency(
@@ -81,6 +83,7 @@ def _system() -> System:
                             Dependency(
                                 source="payments/client.py",
                                 target="invoices.api",
+                                target_path="invoices/api.py",
                                 kind=DependencyKind.IMPORT,
                             )
                         ],

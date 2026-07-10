@@ -2,17 +2,19 @@ from __future__ import annotations
 
 import json
 from contextlib import AbstractContextManager, nullcontext
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 import typer
 from pydantic import ValidationError
 from rich.console import Console
 
-from sktr_core.config import load_config
-from sktr_core.model import ReviewResult
-from sktr_core.pipeline import ReviewPipeline
+from sktr_core.config import SKTRConfig, load_config
+from sktr_core.model import IssueSeverity, ReviewResult
+from sktr_core.pipeline import ReviewPipeline, filter_git_diff
 from sktr_core.plugins import MissingPluginError, PluginRegistry
+from sktr_core.version import SKTR_VERSION
 from sktr_ai import NullAIProvider, resolve_openai_api_key
 from sktr_enrichment import KnowledgeEnrichmentEngine
 from sktr_graph import GraphBuilder, GraphLevel
@@ -30,15 +32,34 @@ from sktr_cli.init_flow import (
     validate_answers,
 )
 
-app = typer.Typer(help="System Knowledge & Technical Review.")
-plugins_app = typer.Typer(help="Inspect SKTR plugins.")
-ai_app = typer.Typer(help="Inspect configured AI providers.")
+app = typer.Typer(
+    help="Understand your software before you change it.",
+    no_args_is_help=True,
+    invoke_without_command=True,
+    rich_markup_mode="markdown",
+)
+plugins_app = typer.Typer(help="List and validate installed SKTR plugins.", no_args_is_help=True)
+ai_app = typer.Typer(help="Check whether configured AI features are ready.", no_args_is_help=True)
 app.add_typer(plugins_app, name="plugins")
 app.add_typer(ai_app, name="ai")
 
 @app.callback()
-def main() -> None:
-    """System Knowledge & Technical Review."""
+def main(
+    show_version: bool = typer.Option(
+        False,
+        "--version",
+        help="Show the installed SKTR version and exit.",
+        is_eager=True,
+    ),
+) -> None:
+    """SKTR - System Knowledge & Technical Review."""
+    if show_version:
+        try:
+            installed_version = version("sktr")
+        except PackageNotFoundError:
+            installed_version = SKTR_VERSION
+        typer.echo(f"sktr {installed_version}")
+        raise typer.Exit()
 
 
 @app.command()
@@ -50,7 +71,7 @@ def init(
         "--preset",
         help="Setup preset: recommended, minimal, or custom.",
     ),
-    enable_ai: bool = typer.Option(False, "--ai", help="Enable the default installed AI provider."),
+    enable_ai: bool = typer.Option(False, "--ai", help="Enable AI features in the generated config."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview configuration without writing sktr.yml."),
 ) -> None:
     """Initialize SKTR configuration in the current project."""
@@ -109,6 +130,11 @@ def init(
 
 @app.command()
 def review(
+    config_file: Path | None = typer.Option(
+        None,
+        "--config",
+        help="Load configuration from this YAML file.",
+    ),
     output: Path | None = typer.Option(
         None,
         "--output",
@@ -138,11 +164,21 @@ def review(
     ai: bool | None = typer.Option(
         None,
         "--ai/--no-ai",
-        help="Enable or disable AI Review for this run.",
+        help="Enable or disable AI features for this review.",
+    ),
+    model: str | None = typer.Option(
+        None,
+        "--model",
+        help="Override the configured AI model for this review.",
+    ),
+    fail_on: IssueSeverity | None = typer.Option(
+        None,
+        "--fail-on",
+        help="Exit nonzero when a finding meets this severity.",
     ),
 ) -> None:
-    """Analyze the current Git diff and produce an architecture-focused review."""
-    config = _require_config()
+    """Review changed code using deterministic architecture analysis."""
+    config = _require_config(config_file)
     registry = PluginRegistry.discover()
     scope = _review_scope(branch=branch, base=base, commit=commit)
     base_branch = base or config.git.default_base_branch
@@ -153,17 +189,23 @@ def review(
             commit=commit,
             registry=registry,
             ai_override=ai,
+            model_override=model,
+            config_path=config_file,
         )
     try:
         selected_output = registry.require("output", output_format).plugin.create_output()
     except MissingPluginError as error:
-        raise typer.BadParameter(str(error), param_hint="--format") from error
+        raise typer.BadParameter(_unsupported_output_message(registry, output_format), param_hint="--format") from error
     selected_output.write(result, str(output) if output is not None else None)
+    threshold = fail_on or _configured_fail_on(config)
+    if threshold is not None and _meets_failure_threshold(result, threshold):
+        raise typer.Exit(code=1)
 
 
 @app.command()
 def report(
     artifact: Path = typer.Argument(..., help="JSON review artifact to render."),
+    config_file: Path | None = typer.Option(None, "--config", help="Load configuration from this YAML file."),
     output: Path | None = typer.Option(None, "--output", "-o", help="Write output to a file instead of stdout."),
     output_format: str = typer.Option(
         "terminal",
@@ -172,7 +214,7 @@ def report(
     ),
 ) -> None:
     """Render an existing review artifact without rerunning Git, rules, or AI."""
-    _require_config()
+    _require_config(config_file)
     try:
         payload = json.loads(artifact.read_text(encoding="utf-8"))
         result_payload = payload.get("review_result", payload)
@@ -184,12 +226,17 @@ def report(
     try:
         selected_output = registry.require("output", output_format).plugin.create_output()
     except MissingPluginError as error:
-        raise typer.BadParameter(str(error), param_hint="--format") from error
+        raise typer.BadParameter(_unsupported_output_message(registry, output_format), param_hint="--format") from error
     selected_output.write(result, str(output) if output is not None else None)
 
 
 @app.command()
 def graph(
+    config_file: Path | None = typer.Option(
+        None,
+        "--config",
+        help="Load configuration from this YAML file.",
+    ),
     output: Path | None = typer.Option(
         None,
         "--output",
@@ -207,11 +254,11 @@ def graph(
         help="Graph level: module or file.",
     ),
 ) -> None:
-    """Generate architecture graphs from the SKTR knowledge model."""
+    """Generate a dependency graph from changed code."""
     if graph_format != "mermaid":
         raise typer.BadParameter("Unsupported graph format. Supported formats: mermaid.", param_hint="--format")
 
-    config = _require_config()
+    config = _require_config(config_file)
     registry = PluginRegistry.discover()
     with _progress("Analyzing dependencies and building the graph..."):
         result = _build_review_result(
@@ -219,8 +266,15 @@ def graph(
             base_branch=config.git.default_base_branch,
             commit=None,
             registry=registry,
+            config_path=config_file,
         )
         dependency_graph = GraphBuilder().build(result.system, level=level)
+    if not dependency_graph.edges:
+        _fail(
+            "No dependency graph could be generated.\n\n"
+            "SKTR found no resolvable dependencies in the reviewed changes.\n\n"
+            "Change or stage files with internal dependencies, then run `sktr graph` again."
+        )
     try:
         graph_output = registry.require("output", graph_format).plugin.create_output()
     except MissingPluginError as error:
@@ -249,22 +303,29 @@ def plugins_list() -> None:
 
 
 @plugins_app.command("doctor")
-def plugins_doctor() -> None:
+def plugins_doctor(
+    config_file: Path | None = typer.Option(None, "--config", help="Load configuration from this YAML file."),
+) -> None:
     """Validate configured SKTR plugins."""
-    config = _require_config()
+    config = _require_config(config_file)
     registry = PluginRegistry.discover()
     errors = registry.validate_configured(_configured_plugins(config))
     if errors:
         for error in errors:
             typer.echo(f"✗ {error}")
+        typer.echo()
+        typer.echo("Install the missing plugins or update the `plugins` section in sktr.yml.")
+        typer.echo("Run `sktr plugins list` to see plugins available in this environment.")
         raise typer.Exit(code=1)
     typer.echo("✓ Plugin configuration is valid.")
 
 
 @ai_app.command("doctor")
-def ai_doctor() -> None:
+def ai_doctor(
+    config_file: Path | None = typer.Option(None, "--config", help="Load configuration from this YAML file."),
+) -> None:
     """Report AI provider readiness without revealing credentials."""
-    config = _require_config()
+    config = _require_config(config_file)
     provider = config.ai.provider
     if not config.ai.enabled or provider is None:
         typer.echo("AI provider: not configured")
@@ -280,6 +341,8 @@ def ai_doctor() -> None:
     resolution = resolve_openai_api_key()
     if resolution.source is None:
         typer.echo("API key: missing")
+        typer.echo()
+        typer.echo("Set SKTR_OPENAI_API_KEY or OPENAI_API_KEY, then run `sktr ai doctor` again.")
     else:
         typer.echo(f"API key: found via {resolution.source}")
 
@@ -308,33 +371,53 @@ def _build_review_result(
     commit: str | None,
     registry: PluginRegistry | None = None,
     ai_override: bool | None = None,
+    model_override: str | None = None,
+    config_path: Path | None = None,
 ) -> ReviewResult:
-    config = _require_config()
+    config = _require_config(config_path)
     plugin_registry = registry or PluginRegistry.discover()
-    analyzers = [
-        plugin_registry.require("analyzer", name).plugin.create_analyzer()
-        for name in config.plugins.analyzers
-    ]
-    rules = [
-        rule
-        for name in config.plugins.rules
-        for rule in plugin_registry.require("rules", name).plugin.create_rules(config.rules)
-    ]
+    if not config.plugins.analyzers:
+        _fail(
+            "No analyzer is configured.\n\n"
+            "SKTR needs at least one analyzer to build the knowledge model.\n\n"
+            "Run `sktr init --force` or add an installed analyzer under `plugins.analyzers`."
+        )
+    try:
+        analyzers = [
+            plugin_registry.require("analyzer", name).plugin.create_analyzer()
+            for name in config.plugins.analyzers
+        ]
+        rules = [
+            rule
+            for name in config.plugins.rules
+            for rule in plugin_registry.require("rules", name).plugin.create_rules(config.rules)
+        ]
+    except MissingPluginError as error:
+        _fail(_missing_plugin_message(error))
     run_ai = _ai_enabled(config, ai_override)
     ai_provider = None
     if run_ai:
         provider_name = config.ai.provider or _default_ai_provider_name(plugin_registry)
         if provider_name:
-            ai_provider = plugin_registry.require("ai_provider", provider_name).plugin.create_ai_provider(
-                model=config.ai.model
-            )
+            try:
+                provider_plugin = plugin_registry.require("ai_provider", provider_name).plugin
+            except MissingPluginError as error:
+                _fail(_missing_plugin_message(error))
+            ai_provider = provider_plugin.create_ai_provider(model=model_override or config.ai.model)
         else:
             ai_provider = NullAIProvider()
-    git_diff = SubprocessGitProvider(
+    git_provider = SubprocessGitProvider(
         scope=scope,
         base_branch=base_branch,
         commit=commit,
-    ).current_diff()
+    )
+    if git_provider.repository_root() is None:
+        _fail(
+            "Not inside a Git repository.\n\n"
+            "SKTR reviews Git changes and cannot determine a diff here.\n\n"
+            "Run this command inside a Git repository, or initialize one with `git init`."
+        )
+    git_diff = filter_git_diff(git_provider.current_diff(), config.review.exclude)
     pipeline = ReviewPipeline(
         diff=git_diff,
         analyzers=analyzers,
@@ -346,14 +429,28 @@ def _build_review_result(
     return pipeline.run()
 
 
-def _require_config():
-    config_path = _config_path()
-    if config_path is None:
-        typer.secho("SKTR is not initialized in this directory.", fg=typer.colors.RED, bold=True)
-        typer.echo("No sktr.yml or sktr.yaml file was found.")
-        typer.echo("Run sktr init to create one.")
+def _require_config(path: Path | None = None) -> SKTRConfig:
+    config_path = path or _config_path()
+    if config_path is None or not config_path.is_file():
+        typer.secho("No SKTR config found.", fg=typer.colors.RED, bold=True)
+        typer.echo()
+        typer.echo("SKTR commands need a sktr.yml or sktr.yaml configuration file.")
+        typer.echo()
+        typer.echo("Run:")
+        typer.echo("  sktr init")
+        typer.echo()
+        typer.echo("Or pass one explicitly:")
+        typer.echo("  sktr review --config path/to/sktr.yml")
         raise typer.Exit(code=1)
-    return load_config(config_path)
+    try:
+        return load_config(config_path)
+    except (OSError, ValidationError, ValueError) as error:
+        typer.secho(f"Invalid SKTR config: {config_path}", fg=typer.colors.RED, bold=True)
+        typer.echo()
+        typer.echo(str(error))
+        typer.echo()
+        typer.echo("Fix the file, or regenerate it with `sktr init --force`.")
+        raise typer.Exit(code=1) from error
 
 
 def _config_path() -> Path | None:
@@ -384,12 +481,52 @@ def _ai_enabled(config, override: bool | None) -> bool:
     return config.ai.enabled
 
 
+def _configured_fail_on(config: SKTRConfig) -> IssueSeverity | None:
+    return config.review.fail_on
+
+
+def _meets_failure_threshold(result: ReviewResult, threshold: IssueSeverity) -> bool:
+    order = {
+        IssueSeverity.INFO: 0,
+        IssueSeverity.LOW: 1,
+        IssueSeverity.MEDIUM: 2,
+        IssueSeverity.HIGH: 3,
+        IssueSeverity.CRITICAL: 4,
+    }
+    return any(order[issue.severity] >= order[threshold] for issue in result.issues)
+
+
 def _default_ai_provider_name(registry: PluginRegistry) -> str | None:
     openai = registry.get("ai_provider", "openai")
     if openai is not None:
         return openai.metadata.name
     providers = registry.by_type("ai_provider")
     return providers[0].metadata.name if providers else None
+
+
+def _missing_plugin_message(error: MissingPluginError) -> str:
+    config_key = {
+        "analyzer": "plugins.analyzers",
+        "rules": "plugins.rules",
+        "output": "plugins.outputs",
+        "ai_provider": "ai.provider",
+    }.get(error.plugin_type, "plugins")
+    return (
+        f"Missing {error.plugin_type} plugin: {error.name}.\n\n"
+        f"Install the plugin or remove `{error.name}` from `{config_key}` in sktr.yml.\n\n"
+        "Run `sktr plugins list` to see installed plugins."
+    )
+
+
+def _unsupported_output_message(registry: PluginRegistry, output_format: str) -> str:
+    available = ", ".join(record.metadata.name for record in registry.by_type("output")) or "none"
+    return f"Unsupported output format: {output_format}. Available formats: {available}."
+
+
+def _fail(message: str) -> NoReturn:
+    typer.secho("Error:", fg=typer.colors.RED, bold=True, err=True)
+    typer.echo(message, err=True)
+    raise typer.Exit(code=1)
 
 
 def _print_init_header() -> None:
