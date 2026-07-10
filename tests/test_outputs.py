@@ -7,8 +7,7 @@ from typer.testing import CliRunner
 
 from sktr_cli.main import app
 from sktr_core.model import (
-    AIAdvice,
-    AIAdviceItem,
+    AIRecommendation,
     AIReview,
     FileChange,
     Issue,
@@ -175,11 +174,11 @@ def test_human_outputs_share_sections_and_group_repeated_findings() -> None:
 def test_report_command_renders_same_artifact_without_rerunning_ai(tmp_path: Path, monkeypatch) -> None:
     result = ReviewResult(
         status="foundation ready",
-        ai_review=AIReview(summary="Stable summary."),
-        ai_advice=AIAdvice(
+        ai_review=AIReview(
             provider="openai",
-            items=[
-                AIAdviceItem(
+            overview="Stable summary.",
+            recommendations=[
+                AIRecommendation(
                     title="Stable advice",
                     why="The artifact is reused.",
                     suggested_action="Render it in each required format.",

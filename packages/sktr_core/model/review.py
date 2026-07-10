@@ -32,15 +32,7 @@ class ReviewContext(BaseModel):
     metadata: dict[str, str] = Field(default_factory=dict)
 
 
-class AIReview(BaseModel):
-    summary: str | None = None
-    recommendations: list[str] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)
-    model: str | None = None
-    metadata: dict[str, str] = Field(default_factory=dict)
-
-
-class AIAdviceItem(BaseModel):
+class AIRecommendation(BaseModel):
     title: str
     why: str
     suggested_action: str
@@ -49,11 +41,13 @@ class AIAdviceItem(BaseModel):
     confidence: str | None = None
 
 
-class AIAdvice(BaseModel):
+class AIReview(BaseModel):
     provider: str
     model: str | None = None
-    items: list[AIAdviceItem] = Field(default_factory=list)
+    overview: str | None = None
+    recommendations: list[AIRecommendation] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    metadata: dict[str, str] = Field(default_factory=dict)
 
 
 class ReviewResult(BaseModel):
@@ -62,7 +56,6 @@ class ReviewResult(BaseModel):
     system: System = Field(default_factory=System)
     issues: list[Issue] = Field(default_factory=list)
     ai_review: AIReview | None = None
-    ai_advice: AIAdvice | None = None
     knowledge_summary: dict[str, int] = Field(default_factory=dict)
     messages: list[str] = Field(default_factory=list)
     metadata: dict[str, object] = Field(default_factory=dict)

@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Protocol
 
-from sktr_core.model import AIAdvice, AIReview, ReviewContext, ReviewResult, System
+from sktr_core.model import AIReview, ReviewContext, ReviewResult, System
 from sktr_core.plugins import AIProvider, AIReviewContext, AnalysisContext, Analyzer, GitDiff, GitProvider, Rule
 
 
@@ -23,8 +23,7 @@ class ReviewPipeline:
         enrichment_engine: EnrichmentEngine | None = None,
         rules: Sequence[Rule] | None = None,
         ai_provider: AIProvider | None = None,
-        run_ai_summary: bool = False,
-        run_ai_advice: bool = False,
+        run_ai: bool = False,
     ) -> None:
         self.diff = diff
         self.git_provider = git_provider
@@ -32,8 +31,7 @@ class ReviewPipeline:
         self.enrichment_engine = enrichment_engine
         self.rules = list(rules or [])
         self.ai_provider = ai_provider
-        self.run_ai_summary = run_ai_summary
-        self.run_ai_advice = run_ai_advice
+        self.run_ai = run_ai
 
     def run(self) -> ReviewResult:
         diff = self.diff or (self.git_provider.current_diff() if self.git_provider else GitDiff())
@@ -76,16 +74,11 @@ class ReviewPipeline:
                 issues.extend(rule.evaluate(system, context))
 
         ai_review: AIReview | None = None
-        ai_advice: AIAdvice | None = None
-        if self.ai_provider is None:
+        if self.ai_provider is None and self.run_ai:
             messages.append("No AI provider configured yet.")
-        else:
+        elif self.ai_provider is not None and self.run_ai:
             ai_context = AIReviewContext(review=context, system=system, issues=issues)
-            if self.run_ai_summary:
-                ai_review = self.ai_provider.review(ai_context)
-                ai_context.ai_summary = ai_review
-            if self.run_ai_advice:
-                ai_advice = self.ai_provider.advise(ai_context)
+            ai_review = self.ai_provider.review(ai_context)
 
         return ReviewResult(
             status="foundation ready",
@@ -93,7 +86,6 @@ class ReviewPipeline:
             system=system,
             issues=issues,
             ai_review=ai_review,
-            ai_advice=ai_advice,
             knowledge_summary=_knowledge_summary(system),
             messages=messages,
             metadata={"rules_executed": rules_executed},

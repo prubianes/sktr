@@ -5,12 +5,11 @@ from sktr_core.model.enums import (
     SymbolKind,
 )
 from sktr_core.model.knowledge import Dependency, Location, Module, SourceFile, Symbol, System
-from sktr_core.model.review import AIAdvice, AIAdviceItem, AIReview, FileChange, Issue, ReviewContext, ReviewResult
+from sktr_core.model.review import AIRecommendation, AIReview, FileChange, Issue, ReviewContext, ReviewResult
 
 __all__ = [
     "AIReview",
-    "AIAdvice",
-    "AIAdviceItem",
+    "AIRecommendation",
     "Dependency",
     "DependencyKind",
     "FileChange",

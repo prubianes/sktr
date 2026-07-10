@@ -15,9 +15,13 @@ from sktr_core.model import (
 )
 from sktr_rules import (
     ForbiddenDependencyRule,
+    DependencyCycleRule,
+    HighFanOutRule,
     LargeFileChangedRule,
     LargeFunctionDetectedRule,
     NewDependencyDetectedRule,
+    MissingTestsRule,
+    PublicApiChangedRule,
     RuleRegistry,
     rules_from_config,
 )
@@ -139,6 +143,85 @@ def test_disabled_rules_are_not_registered() -> None:
     )
 
     assert [rule.id for rule in rules] == ["change.large_file"]
+
+
+def test_dependency_cycle_rule_reports_module_cycle() -> None:
+    system = _system_with_file(
+        SourceFile(
+            path="orders/service.py",
+            dependencies=[
+                Dependency(
+                    source="orders/service.py",
+                    target="payments.client",
+                    kind=DependencyKind.IMPORT,
+                    metadata={"metrics": {"source_module": "orders", "target_module": "payments", "cross_module_dependency": True}},
+                ),
+                Dependency(
+                    source="payments/client.py",
+                    target="orders.service",
+                    kind=DependencyKind.IMPORT,
+                    metadata={"metrics": {"source_module": "payments", "target_module": "orders", "cross_module_dependency": True}},
+                ),
+            ],
+        )
+    )
+
+    issues = DependencyCycleRule().evaluate(system, ReviewContext())
+
+    assert len(issues) == 1
+    assert "orders -> payments -> orders" in issues[0].description
+
+
+def test_high_fan_out_rule_reports_module_above_threshold() -> None:
+    dependencies = [
+        Dependency(
+            source="orders/service.py",
+            target=f"module_{index}",
+            kind=DependencyKind.IMPORT,
+            metadata={"metrics": {"source_module": "orders", "target_module": f"module_{index}"}},
+        )
+        for index in range(3)
+    ]
+    system = _system_with_file(SourceFile(path="orders/service.py", dependencies=dependencies))
+
+    issues = HighFanOutRule(threshold=2).evaluate(system, ReviewContext())
+
+    assert len(issues) == 1
+    assert issues[0].metadata["fan_out"] == "3"
+
+
+def test_missing_tests_rule_only_reports_when_no_test_file_changed() -> None:
+    system = _system_with_file(SourceFile(path="src/orders/service.py"))
+    without_tests = ReviewContext(file_changes=[FileChange(path="src/orders/service.py", status="modified")])
+    with_tests = ReviewContext(
+        file_changes=[
+            FileChange(path="src/orders/service.py", status="modified"),
+            FileChange(path="tests/test_orders.py", status="modified"),
+        ]
+    )
+
+    assert len(MissingTestsRule().evaluate(system, without_tests)) == 1
+    assert MissingTestsRule().evaluate(system, with_tests) == []
+
+
+def test_architecture_rules_ignore_test_modules() -> None:
+    test_file = SourceFile(
+        path="tests/test_service.py",
+        dependencies=[
+            Dependency(
+                source="tests/test_service.py",
+                target=f"module_{index}",
+                kind=DependencyKind.IMPORT,
+                metadata={"metrics": {"source_module": "tests", "target_module": f"module_{index}"}},
+            )
+            for index in range(3)
+        ],
+        metadata={"removed_symbols": ["function:test_old_behavior"]},
+    )
+    system = _system_with_file(test_file)
+
+    assert HighFanOutRule(threshold=1).evaluate(system, ReviewContext()) == []
+    assert PublicApiChangedRule().evaluate(system, ReviewContext()) == []
 
 
 def _system_with_file(source_file: SourceFile) -> System:

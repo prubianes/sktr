@@ -32,6 +32,7 @@ def test_working_tree_review_diffs_against_head() -> None:
         {
             ("git", "diff", "--name-status", "--find-renames", "HEAD"): "M\tapp.py\n",
             ("git", "diff", "--numstat", "--find-renames", "HEAD"): "3\t1\tapp.py\n",
+            ("git", "show", "HEAD:app.py"): "import os\n",
         }
     )
 
@@ -40,6 +41,7 @@ def test_working_tree_review_diffs_against_head() -> None:
     assert diff.metadata["review_scope"] == "working_tree"
     assert diff.metadata["diff_target"] == "HEAD"
     assert diff.changed_files == ["app.py"]
+    assert diff.base_file_contents == {"app.py": "import os\n"}
     assert ["git", "diff", "HEAD"] in runner.calls
 
 

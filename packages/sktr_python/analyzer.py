@@ -16,11 +16,17 @@ class PythonAstAnalyzer:
     def analyze(self, context: AnalysisContext) -> System:
         root = self._root(context)
         changed_files = context.review.changed_files or context.diff.changed_files
-        files = [
-            self._analyze_file(root, path)
-            for path in changed_files
-            if path.endswith(".py") and (root / path).is_file()
-        ]
+        files: list[SourceFile] = []
+        for path in changed_files:
+            if not path.endswith(".py"):
+                continue
+            current_source = context.diff.current_file_contents.get(path)
+            if current_source is None and (root / path).is_file():
+                current_source = (root / path).read_text(encoding="utf-8")
+            baseline_source = context.diff.base_file_contents.get(path)
+            if current_source is None and baseline_source is None:
+                continue
+            files.append(self._analyze_file(path, current_source, baseline_source))
 
         return System(
             modules=[
@@ -43,11 +49,31 @@ class PythonAstAnalyzer:
             return Path(context.diff.repository_root)
         return Path.cwd()
 
-    def _analyze_file(self, root: Path, relative_path: str) -> SourceFile:
-        absolute_path = root / relative_path
-        source = absolute_path.read_text(encoding="utf-8")
-        tree = ast.parse(source, filename=relative_path)
+    def _analyze_file(
+        self,
+        relative_path: str,
+        source: str | None,
+        baseline_source: str | None,
+    ) -> SourceFile:
+        symbols, dependencies = self._analyze_source(relative_path, source) if source is not None else ([], [])
+        baseline_symbols, baseline_dependencies = (
+            self._analyze_source(relative_path, baseline_source) if baseline_source is not None else ([], [])
+        )
+        return SourceFile(
+            path=relative_path,
+            language=self.language,
+            symbols=symbols,
+            dependencies=dependencies,
+            metadata={
+                "baseline_dependencies": sorted({dependency.target for dependency in baseline_dependencies}),
+                "baseline_symbols": sorted(
+                    {f"{symbol.kind.value}:{symbol.name}" for symbol in baseline_symbols}
+                ),
+            },
+        )
 
+    def _analyze_source(self, relative_path: str, source: str) -> tuple[list[Symbol], list[Dependency]]:
+        tree = ast.parse(source, filename=relative_path)
         symbols: list[Symbol] = []
         dependencies: list[Dependency] = []
 
@@ -64,12 +90,7 @@ class PythonAstAnalyzer:
             elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
                 symbols.append(self._symbol(relative_path, node, SymbolKind.FUNCTION))
 
-        return SourceFile(
-            path=relative_path,
-            language=self.language,
-            symbols=symbols,
-            dependencies=dependencies,
-        )
+        return symbols, dependencies
 
     def _dependencies(self, relative_path: str, node: ast.Import | ast.ImportFrom) -> list[Dependency]:
         if isinstance(node, ast.Import):

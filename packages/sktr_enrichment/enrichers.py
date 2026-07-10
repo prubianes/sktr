@@ -32,6 +32,12 @@ class SymbolMetricsEnricher:
     def enrich(self, system: System, diff: GitDiff) -> None:
         changed_paths = {change.path: change for change in diff.file_changes}
         for source_file in _source_files(system):
+            baseline_symbols = {
+                str(value) for value in source_file.metadata.get("baseline_symbols", [])
+            }
+            current_symbols = {f"{symbol.kind.value}:{symbol.name}" for symbol in source_file.symbols}
+            source_file.metadata["removed_symbols"] = sorted(baseline_symbols - current_symbols)
+            source_file.metadata["new_symbols"] = sorted(current_symbols - baseline_symbols)
             change_status = changed_paths.get(source_file.path).status if source_file.path in changed_paths else "unchanged"
             for symbol in source_file.symbols:
                 symbol.metadata["metrics"] = {
@@ -47,11 +53,16 @@ class DependencyEnricher:
         known_modules = {_module_from_path(source_file.path) for source_file in _source_files(system)}
         for source_file in _source_files(system):
             source_module = _module_from_path(source_file.path)
+            baseline_dependencies = {
+                str(value) for value in source_file.metadata.get("baseline_dependencies", [])
+            }
+            current_dependencies = {dependency.target for dependency in source_file.dependencies}
+            source_file.metadata["removed_dependencies"] = sorted(baseline_dependencies - current_dependencies)
             for dependency in source_file.dependencies:
                 target_module = _module_from_dependency(dependency)
                 cross_module = bool(target_module and source_module and target_module != source_module)
                 dependency.metadata["metrics"] = {
-                    "new_dependency": source_file.path in changed_paths,
+                    "new_dependency": dependency.target not in baseline_dependencies,
                     "removed_dependency": False,
                     "cross_module_dependency": cross_module and target_module in known_modules,
                     "same_module_dependency": bool(target_module and target_module == source_module),

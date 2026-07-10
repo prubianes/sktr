@@ -7,14 +7,14 @@ from typing import Protocol
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from sktr_ai.advisor import parse_advice_response
-from sktr_ai.prompts import build_advisor_prompt, build_summary_prompt
-from sktr_core.model import AIAdvice, AIReview
+from sktr_ai.prompts import build_ai_review_prompt
+from sktr_ai.review import parse_ai_review_response
+from sktr_core.model import AIReview
 from sktr_core.plugins import AIReviewContext, PluginMetadata
 
 MISSING_API_KEY_WARNING = (
     "OpenAI provider is configured, but no API key was found. "
-    "Set SKTR_OPENAI_API_KEY or OPENAI_API_KEY to enable AI summaries."
+    "Set SKTR_OPENAI_API_KEY or OPENAI_API_KEY to enable AI Review."
 )
 
 
@@ -97,7 +97,7 @@ def resolve_openai_api_key(environ: dict[str, str] | None = None) -> OpenAIKeyRe
 
 
 class OpenAIProvider:
-    """OpenAI integration foundation; model invocation will be added separately."""
+    """Generate one structured AI Review from deterministic SKTR context."""
 
     def __init__(
         self,
@@ -112,48 +112,29 @@ class OpenAIProvider:
         key = resolve_openai_api_key()
         if key.value is None:
             return AIReview(
-                warnings=[MISSING_API_KEY_WARNING],
-                model=self.model,
-                metadata={"provider": "openai", "api_key_status": "missing"},
-            )
-        try:
-            summary = self.client.generate(
-                prompt=build_summary_prompt(context),
-                model=self._model(),
-                api_key=key.value,
-            )
-            return AIReview(
-                summary=summary,
-                model=self._model(),
-                metadata={"provider": "openai", "api_key_source": key.source or "unknown"},
-            )
-        except RuntimeError as error:
-            return AIReview(
-                model=self.model,
-                warnings=[f"OpenAI summary unavailable: {error}"],
-                metadata={"provider": "openai"},
-            )
-
-    def advise(self, context: AIReviewContext) -> AIAdvice:
-        key = resolve_openai_api_key()
-        if key.value is None:
-            return AIAdvice(
                 provider="openai",
-                model=self.model,
                 warnings=[MISSING_API_KEY_WARNING],
+                model=self.model,
+                metadata={"api_key_status": "missing"},
             )
         try:
             response = self.client.generate(
-                prompt=build_advisor_prompt(context),
+                prompt=build_ai_review_prompt(context),
                 model=self._model(),
                 api_key=key.value,
             )
-            return parse_advice_response(response=response, provider="openai", model=self._model())
+            review = parse_ai_review_response(
+                response=response,
+                provider="openai",
+                model=self._model(),
+            )
+            review.metadata["api_key_source"] = key.source or "unknown"
+            return review
         except RuntimeError as error:
-            return AIAdvice(
+            return AIReview(
                 provider="openai",
                 model=self.model,
-                warnings=[f"OpenAI advisor unavailable: {error}"],
+                warnings=[f"OpenAI AI Review unavailable: {error}"],
             )
 
     def _model(self) -> str:
@@ -164,7 +145,7 @@ class OpenAIProviderPlugin:
     def metadata(self) -> PluginMetadata:
         return PluginMetadata(
             name="openai",
-            version="0.12.0",
+            version="0.15.0",
             type="ai_provider",
             description="OpenAI AI review provider.",
         )

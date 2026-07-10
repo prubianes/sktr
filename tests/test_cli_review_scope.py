@@ -5,6 +5,7 @@ from typer.testing import CliRunner
 from pathlib import Path
 
 from sktr_cli.main import app
+from sktr_cli.main import _progress
 from sktr_cli.main import _review_scope
 from sktr_git import ReviewScope
 
@@ -71,6 +72,19 @@ def test_review_command_requires_config() -> None:
         assert "SKTR is not initialized" in result.output
 
 
+def test_progress_uses_spinner_only_for_interactive_terminal() -> None:
+    interactive = _FakeConsole(is_terminal=True)
+    non_interactive = _FakeConsole(is_terminal=False)
+
+    with _progress("Analyzing...", console=interactive):
+        pass
+    with _progress("Analyzing...", console=non_interactive):
+        pass
+
+    assert interactive.messages == [("[cyan]Analyzing...[/cyan]", "dots")]
+    assert non_interactive.messages == []
+
+
 def _config() -> str:
     return "project:\n  name: test\n  default_base: main\n"
 
@@ -95,3 +109,15 @@ class _isolated:
 
         os.chdir(self.previous)
         shutil.rmtree(self.path)
+
+
+class _FakeConsole:
+    def __init__(self, *, is_terminal: bool) -> None:
+        self.is_terminal = is_terminal
+        self.messages: list[tuple[str, str]] = []
+
+    def status(self, message: str, *, spinner: str):
+        from contextlib import nullcontext
+
+        self.messages.append((message, spinner))
+        return nullcontext()

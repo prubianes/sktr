@@ -3,13 +3,17 @@ from __future__ import annotations
 from pathlib import Path
 import tomllib
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 DEFAULT_ENABLED_RULES = [
     "new_dependency",
     "large_file",
     "large_function",
     "forbidden_dependency",
+    "dependency_cycle",
+    "high_fan_out",
+    "public_api_change",
+    "missing_tests",
 ]
 
 
@@ -33,16 +37,20 @@ class PluginsConfig(BaseModel):
     ai_providers: list[str] = Field(default_factory=list)
 
 
-class AIFeaturesConfig(BaseModel):
-    summary: bool = True
-    advisor: bool = True
-
-
 class AIConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     enabled: bool = False
     provider: str | None = None
     model: str | None = None
-    features: AIFeaturesConfig = Field(default_factory=AIFeaturesConfig)
+
+    @model_validator(mode="after")
+    def validate_state(self) -> "AIConfig":
+        if self.enabled and not self.provider:
+            raise ValueError("ai.provider is required when ai.enabled is true")
+        if not self.enabled and (self.provider is not None or self.model is not None):
+            raise ValueError("ai.provider and ai.model must be omitted when ai.enabled is false")
+        return self
 
 
 class ForbiddenDependency(BaseModel):
@@ -59,10 +67,15 @@ class LargeFunctionConfig(BaseModel):
     max_lines: int = 80
 
 
+class FanOutConfig(BaseModel):
+    max_modules: int = 8
+
+
 class RuleConfig(BaseModel):
     enabled: list[str] = Field(default_factory=lambda: DEFAULT_ENABLED_RULES.copy())
     large_file: LargeFileConfig = Field(default_factory=LargeFileConfig)
     large_function: LargeFunctionConfig = Field(default_factory=LargeFunctionConfig)
+    fan_out: FanOutConfig = Field(default_factory=FanOutConfig)
     forbidden_dependencies: list[ForbiddenDependency] = Field(default_factory=list)
 
 
@@ -216,7 +229,7 @@ def _load_simple_yaml(path: Path) -> dict[str, object]:
 
         if subsection == "forbidden_dependencies" and current_dependency is not None:
             current_dependency[key] = value
-        elif subsection in {"large_file", "large_function"}:
+        elif subsection in {"large_file", "large_function", "fan_out"}:
             nested = rules.setdefault(subsection, {})
             assert isinstance(nested, dict)
             nested[key] = _coerce_scalar(value)
@@ -233,6 +246,8 @@ def _yaml_key_value(line: str) -> tuple[str | None, str]:
 
 def _coerce_scalar(value: str) -> object:
     normalized = value.strip().strip('"').strip("'")
+    if normalized == "[]":
+        return []
     if normalized == "null":
         return None
     if normalized == "true":

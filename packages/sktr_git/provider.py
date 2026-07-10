@@ -49,18 +49,50 @@ class SubprocessGitProvider:
         name_status = self._git(repository_root, "diff", "--name-status", "--find-renames", *diff_target)
         numstat = self._git(repository_root, "diff", "--numstat", "--find-renames", *diff_target)
         file_changes = parse_diff_stats(name_status, numstat)
+        base_revision, current_revision = self._snapshot_revisions(diff_target)
+        base_contents: dict[str, str] = {}
+        current_contents: dict[str, str] = {}
+        for change in file_changes:
+            base_path = change.old_path or change.path
+            if change.status != "added" and base_revision:
+                content = self._git(repository_root, "show", f"{base_revision}:{base_path}")
+                if content:
+                    base_contents[change.path] = content
+            if change.status == "deleted":
+                continue
+            if current_revision:
+                content = self._git(repository_root, "show", f"{current_revision}:{change.path}")
+            else:
+                content = self._read_working_file(repository_root, change.path)
+            if content is not None:
+                current_contents[change.path] = content
 
         return GitDiff(
             raw=raw,
             repository_root=str(repository_root),
             changed_files=[change.path for change in file_changes],
             file_changes=file_changes,
+            base_file_contents=base_contents,
+            current_file_contents=current_contents,
             metadata={
                 "review_scope": self.scope.value,
                 "base_branch": self.base_branch,
                 "diff_target": " ".join(diff_target),
             },
         )
+
+    def _snapshot_revisions(self, diff_target: list[str]) -> tuple[str | None, str | None]:
+        if self.scope == ReviewScope.WORKING_TREE:
+            return "HEAD", None
+        if len(diff_target) >= 2:
+            return diff_target[0], diff_target[1]
+        return None, None
+
+    def _read_working_file(self, repository_root: Path, path: str) -> str | None:
+        try:
+            return (repository_root / path).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return None
 
     def changed_files(self) -> list[str]:
         return self.current_diff().changed_files

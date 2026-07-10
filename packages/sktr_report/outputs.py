@@ -49,10 +49,7 @@ class TerminalOutput:
             lines.extend(self._category_lines(result.issues))
 
         if result.ai_review is not None:
-            lines.extend(self._summary_lines(result))
-
-        if result.ai_advice is not None:
-            lines.extend(self._advice_lines(result))
+            lines.extend(self._ai_review_lines(result))
 
         suggestions = _suggestions(result.issues)
         if suggestions:
@@ -71,15 +68,15 @@ class TerminalOutput:
 
         return "\n".join(lines)
 
-    def _summary_lines(self, result: ReviewResult) -> list[str]:
-        assert result.ai_review is not None
-        lines = ["", "[bold]AI Summary[/bold]"]
-        if result.ai_review.summary:
-            lines.append(result.ai_review.summary)
-        for recommendation in result.ai_review.recommendations:
-            lines.append(f"- {recommendation}")
-        for warning in result.ai_review.warnings:
-            lines.append(f"[yellow]Warning:[/yellow] {warning}")
+    def _ai_review_lines(self, result: ReviewResult) -> list[str]:
+        lines = ["", "[bold]AI Review[/bold]"]
+        if result.ai_review.overview:
+            lines.extend(["[bold]Overview[/bold]", result.ai_review.overview])
+        if result.ai_review.recommendations:
+            lines.append("")
+            lines.append("[bold]Prioritized Actions[/bold]")
+            lines.extend(self._recommendation_lines(result))
+        lines.extend(f"[yellow]Warning:[/yellow] {warning}" for warning in result.ai_review.warnings)
         return lines
 
     def _findings_lines(self, issues: list[Issue]) -> list[str]:
@@ -113,10 +110,10 @@ class TerminalOutput:
             )
         return lines
 
-    def _advice_lines(self, result: ReviewResult) -> list[str]:
-        assert result.ai_advice is not None
-        lines = ["", "[bold]AI Advisor[/bold]"]
-        for index, item in enumerate(result.ai_advice.items, start=1):
+    def _recommendation_lines(self, result: ReviewResult) -> list[str]:
+        assert result.ai_review is not None
+        lines: list[str] = []
+        for index, item in enumerate(result.ai_review.recommendations, start=1):
             if index > 1:
                 lines.append("")
             lines.extend(
@@ -128,8 +125,6 @@ class TerminalOutput:
             )
             if item.related_files:
                 lines.append(f"   Related files: {', '.join(item.related_files)}")
-        for warning in result.ai_advice.warnings:
-            lines.append(f"[yellow]Warning:[/yellow] {warning}")
         return lines
 
     def _status_label(self, status: str) -> str:
@@ -196,21 +191,17 @@ class MarkdownOutput:
 
         if result.ai_review is not None:
             lines.append("")
-            lines.append("## AI Summary")
-            if result.ai_review.summary:
-                lines.append(result.ai_review.summary)
-            for recommendation in result.ai_review.recommendations:
-                lines.append(f"- {recommendation}")
-            for warning in result.ai_review.warnings:
-                lines.append(f"Warning: {warning}")
-
-        if result.ai_advice is not None:
-            lines.append("")
-            lines.append("## AI Advisor")
-            if result.ai_advice.items:
-                for index, item in enumerate(result.ai_advice.items, start=1):
+            lines.append("## AI Review")
+            if result.ai_review.overview:
+                lines.append("")
+                lines.append("### Overview")
+                lines.append(result.ai_review.overview)
+            if result.ai_review.recommendations:
+                lines.append("")
+                lines.append("### Prioritized Actions")
+                for index, item in enumerate(result.ai_review.recommendations, start=1):
                     lines.append("")
-                    lines.append(f"### {index}. {item.title}")
+                    lines.append(f"#### {index}. {item.title}")
                     lines.append("")
                     lines.append(f"**Why:** {item.why}")
                     lines.append("")
@@ -220,9 +211,7 @@ class MarkdownOutput:
                         lines.append("**Related files:**")
                         lines.append("")
                         lines.extend(f"- `{path}`" for path in item.related_files)
-            else:
-                lines.append("No AI advisor recommendations.")
-            for warning in result.ai_advice.warnings:
+            for warning in result.ai_review.warnings:
                 lines.append("")
                 lines.append(f"Warning: {warning}")
 

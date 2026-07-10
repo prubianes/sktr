@@ -3,9 +3,13 @@ from sktr_core.config import RuleConfig
 from sktr_core.plugins import PluginMetadata
 from sktr_rules.rules import (
     ForbiddenDependencyRule,
+    DependencyCycleRule,
+    HighFanOutRule,
     LargeFileChangedRule,
     LargeFunctionDetectedRule,
     NewDependencyDetectedRule,
+    MissingTestsRule,
+    PublicApiChangedRule,
     default_rules,
     rules_from_config,
 )
@@ -15,7 +19,7 @@ class DefaultRulesPlugin:
     def metadata(self) -> PluginMetadata:
         return PluginMetadata(
             name="sktr-rules-default",
-            version="0.11.0",
+            version="0.15.0",
             type="rules",
             description="Default deterministic SKTR rules.",
         )
@@ -26,9 +30,13 @@ class DefaultRulesPlugin:
 __all__ = [
     "DefaultRulesPlugin",
     "ForbiddenDependencyRule",
+    "DependencyCycleRule",
+    "HighFanOutRule",
     "LargeFileChangedRule",
     "LargeFunctionDetectedRule",
     "NewDependencyDetectedRule",
+    "MissingTestsRule",
+    "PublicApiChangedRule",
     "RuleRegistry",
     "default_rules",
     "rules_from_config",

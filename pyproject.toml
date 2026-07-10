@@ -1,11 +1,12 @@
 [project]
 name = "sktr"
-version = "0.13.0"
+version = "0.15.0"
 description = "System Knowledge & Technical Review"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
   "pydantic>=2.0",
+  "questionary>=2.1.1",
   "rich>=13.0",
   "typer>=0.12",
 ]

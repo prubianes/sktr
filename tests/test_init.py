@@ -5,17 +5,22 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from sktr_cli.main import app
+from sktr_cli.init_flow import InitPreset, ProjectDetection, default_answers, render_config, validate_answers
+from sktr_core.plugins import PluginRegistry
 
 runner = CliRunner()
 
 
 def test_init_yes_creates_default_config() -> None:
     with _isolated(tmp_path := Path.cwd() / ".tmp-init-test-1"):
+        Path("pyproject.toml").write_text('[project]\nname = "sample-app"\n', encoding="utf-8")
         result = runner.invoke(app, ["init", "--yes"])
 
         assert result.exit_code == 0
         assert "◆ SKTR Init" in result.output
-        assert "Project name: sample-app" in result.output
+        assert "Detected project" in result.output
+        assert "Name:           sample-app" in result.output
+        assert "Plugin configuration is valid" in result.output
         assert "Next steps:" in result.output
         assert "sktr plugins doctor" in result.output
         config = Path("sktr.yml").read_text(encoding="utf-8")
@@ -51,18 +56,19 @@ def test_init_yes_does_not_prompt() -> None:
         result = runner.invoke(app, ["init", "--yes"], input="")
 
         assert result.exit_code == 0
-        assert "Would you like to use the recommended SKTR defaults?" not in result.output
+        assert "Choose a setup" not in result.output
+        assert "Create sktr.yml with this configuration?" not in result.output
 
 
 def test_init_recommended_defaults_prompt() -> None:
     with _isolated(Path.cwd() / ".tmp-init-test-5"):
-        result = runner.invoke(app, ["init"], input="\n\n")
+        result = runner.invoke(app, ["init"], input="\n\n\n")
 
         assert result.exit_code == 0
-        assert "Would you like to use the recommended SKTR defaults?" in result.output
-        assert "✓ Using recommended defaults" in result.output
-        assert "Enable AI features (summary and advisor)?" in result.output
-        assert "name: sample-app" in Path("sktr.yml").read_text(encoding="utf-8")
+        assert "Choose a setup" in result.output
+        assert "Enable AI Review?" in result.output
+        assert "Configuration" in result.output
+        assert "Create sktr.yml with this configuration?" in result.output
 
 
 def test_init_customize_settings() -> None:
@@ -72,16 +78,18 @@ def test_init_customize_settings() -> None:
             ["init"],
             input="\n".join(
                 [
-                    "n",
+                    "custom",
                     "orders-api",
                     "develop",
+                    *([""] * 8),
                     "y",
                     "y",
                     "n",
                     "n",
                     "y",
-                    "openai",
+                    "",
                     "gpt-5-mini",
+                    "y",
                 ]
             )
             + "\n",
@@ -102,12 +110,62 @@ def test_init_customize_settings() -> None:
 
 def test_init_can_leave_ai_disabled_interactively() -> None:
     with _isolated(Path.cwd() / ".tmp-init-test-7"):
-        result = runner.invoke(app, ["init"], input="\n\n")
+        result = runner.invoke(app, ["init"], input="\n\n\n")
 
         assert result.exit_code == 0
         config = Path("sktr.yml").read_text(encoding="utf-8")
         assert "enabled: false" in config
-        assert "provider: null" in config
+        assert "provider:" not in config
+        assert "model:" not in config
+
+
+def test_init_minimal_preset_selects_essential_outputs() -> None:
+    with _isolated(Path.cwd() / ".tmp-init-test-8"):
+        result = runner.invoke(app, ["init", "--yes", "--preset", "minimal"])
+
+        assert result.exit_code == 0
+        config = Path("sktr.yml").read_text(encoding="utf-8")
+        assert "    - terminal" in config
+        assert "    - json" in config
+        assert "    - markdown" not in config
+        assert "    - mermaid" not in config
+
+
+def test_init_dry_run_does_not_write_config() -> None:
+    with _isolated(Path.cwd() / ".tmp-init-test-9"):
+        result = runner.invoke(app, ["init", "--yes", "--dry-run"])
+
+        assert result.exit_code == 0
+        assert "Dry run - no file was written." in result.output
+        assert "project:" in result.output
+        assert not Path("sktr.yml").exists()
+
+
+def test_init_yes_can_enable_detected_ai_provider_without_prompts(monkeypatch) -> None:
+    monkeypatch.setenv("SKTR_OPENAI_API_KEY", "not-printed")
+    with _isolated(Path.cwd() / ".tmp-init-test-10"):
+        result = runner.invoke(app, ["init", "--yes", "--ai"])
+
+        assert result.exit_code == 0
+        config = Path("sktr.yml").read_text(encoding="utf-8")
+        assert "enabled: true" in config
+        assert "provider: openai" in config
+        assert "not-printed" not in result.output
+
+
+def test_default_config_remains_valid_when_no_plugins_are_discovered() -> None:
+    registry = PluginRegistry([])
+    answers = default_answers(
+        ProjectDetection(name="empty-app", default_base="main", languages=[], repository="directory"),
+        registry,
+        preset=InitPreset.RECOMMENDED,
+    )
+
+    config = render_config(answers)
+
+    assert validate_answers(answers, registry) == []
+    assert "analyzers: []" in config
+    assert "outputs: []" in config
 
 
 class _isolated:

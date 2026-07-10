@@ -51,7 +51,7 @@ def test_missing_key_returns_a_warning(monkeypatch) -> None:
 
     assert review.warnings == [
         "OpenAI provider is configured, but no API key was found. "
-        "Set SKTR_OPENAI_API_KEY or OPENAI_API_KEY to enable AI summaries."
+        "Set SKTR_OPENAI_API_KEY or OPENAI_API_KEY to enable AI Review."
     ]
     assert review.metadata["api_key_status"] == "missing"
 
@@ -66,8 +66,8 @@ def test_openai_timeout_becomes_a_provider_warning(monkeypatch) -> None:
 
     review = OpenAIProvider(client=ResponsesAPIClient()).review(AIReviewContext())
 
-    assert review.summary is None
-    assert review.warnings == ["OpenAI summary unavailable: OpenAI request could not be completed"]
+    assert review.overview is None
+    assert review.warnings == ["OpenAI AI Review unavailable: OpenAI request could not be completed"]
 
 
 def test_responses_api_client_extracts_nested_output_text() -> None:

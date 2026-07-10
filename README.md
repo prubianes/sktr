@@ -27,6 +27,31 @@ Create the default config without prompts:
 sktr init --yes
 ```
 
+Use a preset:
+
+```bash
+sktr init --preset recommended
+sktr init --preset minimal
+sktr init --preset custom
+```
+
+Enable the default installed AI provider in non-interactive setup:
+
+```bash
+sktr init --yes --ai
+```
+
+Preview the detected project and generated YAML without writing a file:
+
+```bash
+sktr init --yes --dry-run
+```
+
+Interactive setup detects project metadata and installed plugins, provides
+arrow-key menus and checkbox selection, previews the final configuration, and
+validates plugin capabilities before writing `sktr.yml`. API keys remain in
+environment variables and are never written to configuration.
+
 Overwrite an existing config:
 
 ```bash
@@ -159,3 +184,26 @@ Validate configured plugins:
 ```bash
 sktr plugins doctor
 ```
+
+## AI Review
+
+SKTR can add one optional AI Review containing a concise overview and prioritized
+recommendations based only on structured deterministic findings.
+
+```yaml
+ai:
+  enabled: true
+  provider: openai
+  model: gpt-5-mini
+```
+
+When disabled, the configuration is simply:
+
+```yaml
+ai:
+  enabled: false
+```
+
+Use `--ai` or `--no-ai` to override the configured behavior for one run. OpenAI
+credentials are resolved from `SKTR_OPENAI_API_KEY` and then `OPENAI_API_KEY`;
+keys are never stored in `sktr.yml`.
