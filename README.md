@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/prubianes/sktr/main/assets/sktr-logo.png" alt="SKTR - System Knowledge & Technical Review" width="420">
+  <img src="assets/sktr-logo.png" alt="SKTR - System Knowledge & Technical Review" width="420">
 </p>
 
 # SKTR
