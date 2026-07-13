@@ -15,6 +15,20 @@ class SymbolKind(StrEnum):
     UNKNOWN = "unknown"
 
 
+class SymbolVisibility(StrEnum):
+    PUBLIC = "public"
+    PROTECTED = "protected"
+    INTERNAL = "internal"
+    PRIVATE = "private"
+    UNKNOWN = "unknown"
+
+
+class APIExposure(StrEnum):
+    EXPORTED = "exported"
+    NOT_EXPORTED = "not_exported"
+    UNKNOWN = "unknown"
+
+
 class DependencyKind(StrEnum):
     IMPORT = "import"
     CALL = "call"

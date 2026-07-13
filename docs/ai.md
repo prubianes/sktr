@@ -31,14 +31,26 @@ included in artifacts, or printed by diagnostics.
 ai:
   enabled: true
   provider: openai
-  model: gpt-5-mini
+  model: gpt-5.6-terra
 ```
 
 Select a model for one review:
 
 ```bash
-sktr review --ai --model gpt-5-mini
+sktr review --ai --model gpt-5.6-sol
 ```
+
+Interactive init offers these OpenAI profiles:
+
+| Profile | Model | Intended use |
+|---|---|---|
+| Balanced (recommended) | `gpt-5.6-terra` | Architecture review with a quality/cost balance |
+| Fast | `gpt-5.6-luna` | Frequent and high-volume reviews |
+| Best quality | `gpt-5.6-sol` | Difficult, quality-first reviews |
+| Custom | User-provided | Snapshots, aliases, or future models |
+
+SKTR does not restrict manual model IDs. Older existing configurations continue
+to load, while new OpenAI configurations default to Terra.
 
 Disable configured AI features for one review:
 

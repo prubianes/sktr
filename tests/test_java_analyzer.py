@@ -6,7 +6,7 @@ from sktr_core.model import DependencyScope, FileChange, SymbolKind
 from sktr_core.plugins import AnalysisContext, GitDiff
 from sktr_enrichment import KnowledgeEnrichmentEngine
 from sktr_java import JavaAnalyzer
-from sktr_rules import NewDependencyDetectedRule
+from sktr_rules import NewDependencyDetectedRule, PublicApiChangedRule
 
 
 def test_java_extracts_packages_types_methods_and_imports(tmp_path: Path) -> None:
@@ -24,7 +24,7 @@ import com.sample.repositories.OrderRepository;
 import static com.sample.repositories.OrderRepository.create;
 public record OrderService(String id) {
     public OrderService {}
-    public String createOrder() { return id; }
+    @Deprecated public String createOrder() { return id; }
 }
 interface OrderPort { String load(); }
 enum Status { CREATED }
@@ -47,6 +47,9 @@ enum Status { CREATED }
     assert dependencies["com.sample.repositories.OrderRepository"].scope == DependencyScope.INTERNAL
     assert dependencies["com.sample.repositories.OrderRepository"].target_path.endswith("OrderRepository.java")
     assert dependencies["com.sample.repositories.OrderRepository.create"].scope == DependencyScope.INTERNAL
+    create_method = next(symbol for symbol in source_file.symbols if symbol.name == "createOrder")
+    assert create_method.metadata["body_lines"] >= 1
+    assert create_method.metadata["annotations"] == ["Deprecated"]
 
 
 def test_java_supports_gradle_test_roots_and_reports_parse_diagnostics(tmp_path: Path) -> None:
@@ -102,3 +105,84 @@ def test_java_deleted_file_retains_baseline_symbols_and_dependencies() -> None:
     assert source_file.dependencies == []
     assert source_file.metadata["baseline_dependencies"] == ["java.util.List"]
     assert source_file.metadata["baseline_symbols"] == ["class:Legacy", "method:Legacy.run"]
+
+
+def test_java_repository_snapshot_resolves_classes_without_working_tree_files(tmp_path: Path) -> None:
+    path = "src/main/java/com/sample/orders/OrderService.java"
+    target = "src/main/java/com/sample/repositories/OrderRepository.java"
+    diff = GitDiff(
+        repository_root=str(tmp_path),
+        changed_files=[path, target],
+        current_file_contents={
+            path: (
+                "package com.sample.orders; "
+                "import com.sample.repositories.OrderRepository; "
+                "class OrderService {}"
+            ),
+            target: "package com.sample.repositories; class OrderRepository {}",
+        },
+        metadata={"graph_scope": "repository", "repository_revision": "abc123"},
+    )
+
+    dependency = JavaAnalyzer().analyze(AnalysisContext(diff=diff)).modules[0].files[0].dependencies[0]
+
+    assert dependency.scope == DependencyScope.INTERNAL
+    assert dependency.target_path == target
+
+
+def test_java_visibility_and_inheritance_are_normalized(tmp_path: Path) -> None:
+    sources = {
+        "services/orders/src/main/java/com/sample/BaseService.java": (
+            "package com.sample; public class BaseService {}"
+        ),
+        "services/orders/src/main/java/com/sample/OrderPort.java": (
+            "package com.sample; public interface OrderPort {}"
+        ),
+        "services/orders/src/main/java/com/sample/OrderService.java": (
+            "package com.sample; public class OrderService extends BaseService implements OrderPort { "
+            "public void create() {} private void helper() {} }"
+        ),
+    }
+    diff = GitDiff(
+        repository_root=str(tmp_path),
+        changed_files=list(sources),
+        current_file_contents=sources,
+        metadata={"graph_scope": "repository"},
+    )
+
+    system = JavaAnalyzer().analyze(AnalysisContext(diff=diff))
+    service = next(
+        source_file for source_file in system.modules[0].files if source_file.path.endswith("OrderService.java")
+    )
+    symbols = {symbol.name: symbol for symbol in service.symbols}
+
+    assert symbols["OrderService"].api_exposure.value == "exported"
+    assert symbols["create"].api_exposure.value == "exported"
+    assert symbols["helper"].api_exposure.value == "not_exported"
+    assert service.metadata["build_module"] == "services/orders"
+    assert {(dependency.kind.value, dependency.target_module) for dependency in service.dependencies} >= {
+        ("extends", "com.sample"),
+        ("implements", "com.sample"),
+    }
+
+
+def test_java_public_api_rule_ignores_removed_private_method(tmp_path: Path) -> None:
+    path = "src/main/java/com/sample/Service.java"
+    baseline = (
+        "package com.sample; public class Service { "
+        "public void run() {} private void helper() {} }"
+    )
+    current = "package com.sample; public class Service {}"
+    diff = GitDiff(
+        repository_root=str(tmp_path),
+        changed_files=[path],
+        file_changes=[FileChange(path=path, status="modified")],
+        base_file_contents={path: baseline},
+        current_file_contents={path: current},
+    )
+    system = JavaAnalyzer().analyze(AnalysisContext(diff=diff))
+    KnowledgeEnrichmentEngine.default().enrich(system, diff)
+
+    issues = PublicApiChangedRule().evaluate(system, AnalysisContext(diff=diff).review)
+
+    assert [issue.metadata["symbol"] for issue in issues] == ["Service.run"]

@@ -35,7 +35,7 @@ ROOT = Path(__file__).parents[1]
         (["--help"], "Understand your software before you change it"),
         (["init", "--help"], "without prompts"),
         (["review", "--help"], "--fail-on"),
-        (["graph", "--help"], "Graph level: module or file"),
+        (["graph", "--help"], "--scope"),
         (["plugins", "--help"], "List and validate installed SKTR plugins"),
         (["ai", "--help"], "Check whether configured AI features are ready"),
     ],
@@ -51,7 +51,7 @@ def test_cli_reports_version() -> None:
     result = runner.invoke(cli_main.app, ["--version"])
 
     assert result.exit_code == 0
-    assert result.output.strip() == "sktr 0.18.0"
+    assert result.output.strip() == "sktr 0.20.0"
 
 
 def test_review_accepts_explicit_config_path(tmp_path: Path, monkeypatch) -> None:
@@ -275,7 +275,7 @@ def test_packaging_metadata_matches_release_contract() -> None:
         project = tomllib.load(file)["project"]
 
     assert project["name"] == "sktr"
-    assert project["version"] == "0.18.0"
+    assert project["version"] == "0.20.0"
     assert project["requires-python"] == ">=3.13"
     assert project["readme"] == "README.md"
     assert project["license"] == "MIT"
@@ -305,7 +305,7 @@ def test_plugin_load_errors_are_reported_by_doctor_validation() -> None:
 def test_builtin_plugin_versions_match_package_version() -> None:
     registry = PluginRegistry.discover()
 
-    assert SKTR_VERSION == "0.18.0"
+    assert SKTR_VERSION == "0.20.0"
     assert {record.metadata.version for record in registry.records} == {SKTR_VERSION}
 
 

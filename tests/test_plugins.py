@@ -70,7 +70,7 @@ def test_pipeline_construction_from_discovered_plugins() -> None:
             registry=PluginRegistry.discover(),
         )
 
-    assert result.status == "foundation ready"
+    assert result.status == "review complete"
 
 
 def test_plugins_doctor_requires_config() -> None:

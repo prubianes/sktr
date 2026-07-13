@@ -14,3 +14,10 @@ sktr review --format json --output sktr-review.json
 ```
 
 The Python, TypeScript, and Java files should all appear in the knowledge model.
+
+Generate a mixed-language repository graph or inspect one dependency neighborhood:
+
+```bash
+sktr graph --scope repository --output architecture.mmd
+sktr graph --scope repository --focus web
+```

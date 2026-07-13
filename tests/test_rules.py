@@ -5,6 +5,7 @@ from sktr_core.model import (
     Dependency,
     DependencyKind,
     FileChange,
+    IssueSeverity,
     Location,
     Module,
     ReviewContext,
@@ -82,6 +83,20 @@ def test_large_file_changed_rule_reports_large_changed_file() -> None:
     assert issues[0].metadata["path"] == "src/large.py"
     assert issues[0].metadata["changed_lines"] == "110"
     assert issues[0].metadata["max_changed_lines"] == "100"
+    assert issues[0].severity == IssueSeverity.LOW
+
+
+def test_large_change_surface_keeps_analyzed_source_at_medium_severity() -> None:
+    path = "src/large.py"
+    system = _system_with_file(SourceFile(path=path, language="python"))
+    context = ReviewContext(
+        file_changes=[FileChange(path=path, status="modified", added_lines=101)]
+    )
+
+    issue = LargeFileChangedRule(threshold=100).evaluate(system, context)[0]
+
+    assert issue.title == "Large change surface"
+    assert issue.severity == IssueSeverity.MEDIUM
 
 
 def test_large_function_detected_rule_reports_large_function() -> None:
@@ -258,7 +273,7 @@ def test_public_api_removal_suppresses_methods_owned_by_removed_class() -> None:
         SourceFile(
             path="reporter.py",
             metadata={
-                "removed_symbols": [
+                "removed_public_symbols": [
                     "class:Reporter",
                     "method:Reporter.render",
                     "method:Output.write",
@@ -284,6 +299,21 @@ def test_missing_tests_rule_only_reports_when_no_test_file_changed() -> None:
 
     assert len(MissingTestsRule().evaluate(system, without_tests)) == 1
     assert MissingTestsRule().evaluate(system, with_tests) == []
+
+
+def test_missing_tests_rule_requires_detected_test_infrastructure_when_repository_is_indexed() -> None:
+    system = _system_with_file(SourceFile(path="src/orders/service.ts"))
+    no_tests = ReviewContext(
+        file_changes=[FileChange(path="src/orders/service.ts", status="modified")],
+        repository_files=["package.json", "src/orders/service.ts"],
+        metadata={"repository_files_indexed": "true"},
+    )
+    with_vitest = no_tests.model_copy(
+        update={"repository_files": [*no_tests.repository_files, "vitest.config.ts"]}
+    )
+
+    assert MissingTestsRule().evaluate(system, no_tests) == []
+    assert len(MissingTestsRule().evaluate(system, with_vitest)) == 1
 
 
 def test_architecture_rules_ignore_test_modules() -> None:

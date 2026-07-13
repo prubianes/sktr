@@ -13,7 +13,7 @@ import questionary
 import typer
 from questionary import Choice, Style
 
-from sktr_ai import resolve_openai_api_key
+from sktr_ai import DEFAULT_OPENAI_MODEL, OPENAI_MODEL_PROFILES, resolve_openai_api_key
 from sktr_core.config import DEFAULT_ENABLED_RULES, DEFAULT_EXCLUDES
 from sktr_core.plugins import PluginRegistry
 
@@ -178,7 +178,7 @@ def default_answers(
         outputs=outputs,
         ai_enabled=bool(provider),
         ai_provider=provider,
-        ai_model="gpt-5-mini" if provider == "openai" else None,
+        ai_model=DEFAULT_OPENAI_MODEL if provider == "openai" else None,
     )
 
 
@@ -249,7 +249,17 @@ def _with_ai(answers: InitAnswers, registry: PluginRegistry, prompter: InitPromp
         [(record.metadata.name, record.metadata.name) for record in providers],
         providers[0].metadata.name,
     )
-    model = prompter.text("AI model", "gpt-5-mini" if provider == "openai" else "default")
+    if provider == "openai":
+        custom = "__custom__"
+        model = prompter.select(
+            "OpenAI model",
+            [*OPENAI_MODEL_PROFILES, ("Custom model ID", custom)],
+            DEFAULT_OPENAI_MODEL,
+        )
+        if model == custom:
+            model = prompter.text("Custom model ID", DEFAULT_OPENAI_MODEL)
+    else:
+        model = prompter.text("AI model", "default")
     return InitAnswers(
         **{**answers.__dict__, "ai_enabled": True, "ai_provider": provider, "ai_model": model}
     )

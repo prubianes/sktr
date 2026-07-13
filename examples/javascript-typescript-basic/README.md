@@ -12,6 +12,7 @@ git commit -m "Initialize SKTR"
 git add src
 sktr review
 sktr graph --level file --output architecture.mmd
+sktr graph --scope repository --level file --focus src/controllers/orderController.ts
 ```
 
 The report should include a high-severity `Forbidden dependency` finding.

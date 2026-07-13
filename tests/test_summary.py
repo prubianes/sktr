@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from sktr_core.model import FileChange, Issue, IssueCategory, IssueSeverity, ReviewContext, ReviewResult
-from sktr_report.summary import risk_score
+from sktr_report.summary import breadth_penalty, risk_score
 
 
 def test_score_caps_repeated_findings_from_the_same_rule() -> None:
@@ -65,3 +65,20 @@ def test_score_reflects_independent_risk_categories() -> None:
     )
 
     assert risk_score(result) == 76
+
+
+def test_score_includes_bounded_change_breadth_metadata() -> None:
+    result = ReviewResult(
+        status="review complete",
+        context=ReviewContext(
+            file_changes=[FileChange(path=f"src/file_{index}.py", status="modified") for index in range(30)]
+        ),
+        knowledge_summary={
+            "production_changed_files": 10,
+            "changed_modules": 5,
+            "public_api_changes": 5,
+        },
+    )
+
+    assert breadth_penalty(result) == 13
+    assert risk_score(result) == 87

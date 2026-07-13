@@ -11,6 +11,7 @@ git commit -m "Initialize SKTR"
 git add src
 sktr review
 sktr graph --output architecture.mmd
+sktr graph --scope repository --dependencies-of com.sample.controllers
 ```
 
 The report should include a high-severity `Forbidden dependency` finding.

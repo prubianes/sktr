@@ -84,10 +84,13 @@ sktr report sktr-review.json --format markdown --output REVIEW.md
 
 ```bash
 sktr graph --format mermaid --output architecture.mmd
+sktr graph --scope repository --output repository.mmd
+sktr graph --scope repository --dependencies-of orders
 ```
 
-Graph generation uses dependencies in the knowledge model for the current
-working-tree review. It reports a clear error when no resolvable edge exists.
+The default change graph keeps resolved unchanged targets as context. Repository
+graphs analyze all non-excluded Git-managed files and highlight the selected
+working-tree, branch, or commit change. See [architecture graphs](graphs.md).
 
 ## Enable AI features
 
@@ -95,7 +98,7 @@ working-tree review. It reports a clear error when no resolvable edge exists.
 export SKTR_OPENAI_API_KEY="your-api-key"
 sktr ai doctor
 sktr review --ai
-sktr review --ai --model gpt-5-mini
+sktr review --ai --model gpt-5.6-terra
 ```
 
 AI is optional. Without it, analyzers, enrichment, rules, scoring, and all output

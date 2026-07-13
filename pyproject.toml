@@ -1,6 +1,6 @@
 [project]
 name = "sktr"
-version = "0.18.0"
+version = "0.20.0"
 description = "Language-agnostic software intelligence and architecture review CLI"
 readme = "README.md"
 requires-python = ">=3.13"

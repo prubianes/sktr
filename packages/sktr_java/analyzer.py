@@ -7,6 +7,7 @@ import tree_sitter_java
 from tree_sitter import Node
 
 from sktr_core.model import (
+    APIExposure,
     Dependency,
     DependencyKind,
     DependencyScope,
@@ -14,6 +15,7 @@ from sktr_core.model import (
     SourceFile,
     Symbol,
     SymbolKind,
+    SymbolVisibility,
     System,
 )
 from sktr_core.plugins import AnalysisContext
@@ -40,6 +42,7 @@ class JavaAnalyzer:
 
     def analyze(self, context: AnalysisContext) -> System:
         root = self._root(context)
+        snapshot_complete = context.diff.metadata.get("graph_scope") == "repository"
         changed_paths = [
             path
             for path in (context.review.changed_files or context.diff.changed_files)
@@ -47,7 +50,11 @@ class JavaAnalyzer:
         ]
         if not changed_paths:
             return System(metadata={"analyzer": self.__class__.__name__})
-        class_index = _class_index(root)
+        class_index = (
+            _class_index_from_sources(context.diff.current_file_contents)
+            if snapshot_complete
+            else _class_index(root)
+        )
         files: list[SourceFile] = []
         diagnostics = []
         for path in changed_paths:
@@ -66,7 +73,13 @@ class JavaAnalyzer:
             if files
             else [],
             diagnostics=diagnostics,
-            metadata={"analyzer": self.__class__.__name__},
+            metadata={
+                "analyzer": self.__class__.__name__,
+                "test_infrastructure_detected": any(
+                    "src/test" in path.replace("\\", "/")
+                    for path in context.diff.repository_files
+                ),
+            },
         )
 
     def _analyze_file(
@@ -98,6 +111,8 @@ class JavaAnalyzer:
         source_module = package_name or _module_for_path(path)
         for dependency in dependencies:
             _resolve_dependency(dependency, class_index=class_index, source_module=source_module)
+        for dependency in baseline_dependencies:
+            _resolve_dependency(dependency, class_index=class_index, source_module=source_module)
         return (
             SourceFile(
                 path=path,
@@ -107,8 +122,19 @@ class JavaAnalyzer:
                 dependencies=dependencies,
                 metadata={
                     "package": package_name,
+                    "build_module": _build_module_for_path(path),
                     "baseline_dependencies": sorted({item.target for item in baseline_dependencies}),
+                    "baseline_dependency_modules": sorted(
+                        {item.target_module for item in baseline_dependencies if item.target_module}
+                    ),
                     "baseline_symbols": sorted({_symbol_identity(symbol) for symbol in baseline_symbols}),
+                    "baseline_public_symbols": sorted(
+                        {
+                            _symbol_identity(symbol)
+                            for symbol in baseline_symbols
+                            if symbol.api_exposure == APIExposure.EXPORTED
+                        }
+                    ),
                 },
             ),
             diagnostics,
@@ -135,19 +161,42 @@ def _symbols(path: str, root: Node, source: bytes) -> list[Symbol]:
         if kind is not None:
             name = node_text(node.child_by_field_name("name"), source)
             if name:
-                symbols.append(Symbol(name=name, kind=kind, location=location(path, node)))
+                visibility = _visibility(node, source)
+                exposed = visibility in {SymbolVisibility.PUBLIC, SymbolVisibility.PROTECTED}
+                symbols.append(
+                    Symbol(
+                        name=name,
+                        kind=kind,
+                        visibility=visibility,
+                        api_exposure=APIExposure.EXPORTED if exposed else APIExposure.NOT_EXPORTED,
+                        location=location(path, node),
+                        metadata={"annotations": _annotations(node, source)},
+                    )
+                )
         elif node.type in METHOD_NODES:
             name = node_text(node.child_by_field_name("name"), source)
             if not name and node.type == "compact_constructor_declaration":
                 name = node_text(next(iter(node.named_children), None), source)
             owner = _owner_name(node, source)
             if name:
+                body = node.child_by_field_name("body")
+                visibility = _visibility(node, source)
+                exposed = (
+                    visibility in {SymbolVisibility.PUBLIC, SymbolVisibility.PROTECTED}
+                    and _containing_type_is_exposed(node, source)
+                )
+                metadata: dict[str, object] = {"annotations": _annotations(node, source)}
+                if body is not None:
+                    metadata["body_lines"] = _node_lines(body)
                 symbols.append(
                     Symbol(
                         name=name,
                         kind=SymbolKind.METHOD,
                         owner=owner or None,
+                        visibility=visibility,
+                        api_exposure=APIExposure.EXPORTED if exposed else APIExposure.NOT_EXPORTED,
                         location=location(path, node),
+                        metadata=metadata,
                     )
                 )
     return _unique_symbols(symbols)
@@ -171,6 +220,32 @@ def _dependencies(path: str, root: Node, source: bytes) -> list[Dependency]:
                     metadata={"static": is_static},
                 )
             )
+    for declaration in walk(root):
+        if declaration.type not in TYPE_NODES:
+            continue
+        for relation in declaration.named_children:
+            if relation.type not in {"superclass", "super_interfaces", "extends_interfaces"}:
+                continue
+            kind = (
+                DependencyKind.EXTENDS
+                if relation.type in {"superclass", "extends_interfaces"}
+                else DependencyKind.IMPLEMENTS
+            )
+            for type_node in walk(relation):
+                if type_node.type not in {"type_identifier", "scoped_type_identifier"}:
+                    continue
+                if type_node.type == "type_identifier" and type_node.parent is not None and type_node.parent.type == "scoped_type_identifier":
+                    continue
+                target = node_text(type_node, source)
+                if target:
+                    dependencies.append(
+                        Dependency(
+                            source=path,
+                            target=target,
+                            kind=kind,
+                            location=location(path, relation),
+                        )
+                    )
     return _unique_dependencies(dependencies)
 
 
@@ -203,7 +278,10 @@ def _matched_class(target: str, class_index: dict[str, str]) -> str | None:
             return candidate
         candidate = candidate.rsplit(".", 1)[0] if "." in candidate else ""
     package_matches = sorted(name for name in class_index if name.startswith(f"{target}."))
-    return package_matches[0] if package_matches else None
+    if package_matches:
+        return package_matches[0]
+    simple_matches = sorted(name for name in class_index if name.rsplit(".", 1)[-1] == target)
+    return simple_matches[0] if len(simple_matches) == 1 else None
 
 
 def _class_index(root: Path) -> dict[str, str]:
@@ -221,6 +299,18 @@ def _class_index(root: Path) -> dict[str, str]:
     return result
 
 
+def _class_index_from_sources(sources: dict[str, str]) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for path, source in sorted(sources.items()):
+        if PurePosixPath(path).suffix.lower() != ".java":
+            continue
+        match = PACKAGE_PATTERN.search(source)
+        stem = PurePosixPath(path).stem
+        qualified = f"{match.group(1)}.{stem}" if match else stem
+        result[qualified] = path
+    return result
+
+
 def _owner_name(node: Node, source: bytes) -> str:
     parent = node.parent
     owners: list[str] = []
@@ -233,11 +323,59 @@ def _owner_name(node: Node, source: bytes) -> str:
     return ".".join(reversed(owners))
 
 
+def _visibility(node: Node, source: bytes) -> SymbolVisibility:
+    modifiers = next((child for child in node.children if child.type == "modifiers"), None)
+    value = node_text(modifiers, source) if modifiers is not None else ""
+    if "public" in value.split():
+        return SymbolVisibility.PUBLIC
+    if "protected" in value.split():
+        return SymbolVisibility.PROTECTED
+    if "private" in value.split():
+        return SymbolVisibility.PRIVATE
+    return SymbolVisibility.INTERNAL
+
+
+def _annotations(node: Node, source: bytes) -> list[str]:
+    modifiers = next((child for child in node.children if child.type == "modifiers"), None)
+    if modifiers is None:
+        return []
+    values: list[str] = []
+    for child in walk(modifiers):
+        if child.type not in {"annotation", "marker_annotation"}:
+            continue
+        value = node_text(child, source).removeprefix("@").split("(", 1)[0]
+        if value:
+            values.append(value)
+    return sorted(set(values))
+
+
+def _containing_type_is_exposed(node: Node, source: bytes) -> bool:
+    parent = node.parent
+    while parent is not None:
+        if parent.type in TYPE_NODES:
+            return _visibility(parent, source) in {SymbolVisibility.PUBLIC, SymbolVisibility.PROTECTED}
+        parent = parent.parent
+    return False
+
+
+def _node_lines(node: Node) -> int:
+    return node.end_point.row - node.start_point.row + 1
+
+
 def _module_for_path(path: str) -> str:
     parts = list(PurePosixPath(path).parts)
     if "java" in parts:
         parts = parts[parts.index("java") + 1 :]
     return ".".join(parts[:-1]) or PurePosixPath(path).stem
+
+
+def _build_module_for_path(path: str) -> str:
+    normalized = PurePosixPath(path)
+    parts = list(normalized.parts)
+    if "src" not in parts:
+        return "."
+    prefix = parts[: parts.index("src")]
+    return "/".join(prefix) or "."
 
 
 def _symbol_identity(symbol: Symbol) -> str:
@@ -257,10 +395,11 @@ def _unique_symbols(symbols: list[Symbol]) -> list[Symbol]:
 
 
 def _unique_dependencies(dependencies: list[Dependency]) -> list[Dependency]:
-    seen: set[str] = set()
+    seen: set[tuple[DependencyKind, str]] = set()
     result: list[Dependency] = []
     for dependency in dependencies:
-        if dependency.target not in seen:
-            seen.add(dependency.target)
+        identity = (dependency.kind, dependency.target)
+        if identity not in seen:
+            seen.add(identity)
             result.append(dependency)
     return result

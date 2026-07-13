@@ -62,13 +62,16 @@ Common next steps:
 
 ```bash
 sktr review --ai
-sktr review --ai --model gpt-5-mini
+sktr review --ai --model gpt-5.6-terra
 sktr review --format markdown --output REVIEW.md
 sktr review --format json --output sktr-review.json
 sktr graph --format mermaid --output architecture.mmd
+sktr graph --scope repository --focus orders
 ```
 
 See the [quickstart](docs/quickstart.md) for review scopes and a complete first run.
+See [architecture graphs](docs/graphs.md) for repository and focused views.
+See [analyzer semantics](docs/analyzers.md) for visibility, modules, and metrics.
 
 ## Example output
 
@@ -154,9 +157,10 @@ API keys never belong in this file. See the complete
 ### Risk score
 
 The score starts at 100. Deterministic findings subtract severity-weighted
-penalties, with caps for repeated findings and categories. Informational findings
-and changed-file count do not lower the score: scope size represents review
-effort, not architectural risk.
+penalties, with caps for repeated findings and categories. A separate bounded
+review-breadth penalty accounts for production files, changed modules, public API
+changes, and unusually large diffs. Documentation and test files are reported but
+do not count as production files. Informational findings do not lower the score.
 
 - Low: 85-100
 - Medium: 65-84
@@ -198,8 +202,11 @@ See the [plugin guide](docs/plugins.md) to build or distribute a plugin.
 
 The v0.16-v0.18 roadmap delivered bundled JavaScript/TypeScript and Java
 analyzers, followed by CI severity gates, exclusions, parse diagnostics, and a
-frozen artifact schema. See the [canonical roadmap](docs/roadmap.md) for milestone
-deliverables and deferred post-v1 work.
+frozen artifact schema. v0.19 added repository-context graphs, and v0.20 adds
+evidence-based API exposure, logical application modules, alias resolution, and
+more precise React and Java signals.
+See the [canonical roadmap](docs/roadmap.md) for milestone deliverables and
+deferred post-v1 work.
 
 ## Contributing
 

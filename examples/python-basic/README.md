@@ -25,6 +25,7 @@ Generate artifacts from the same deterministic result:
 sktr review --format markdown --output REVIEW.md
 sktr review --format json --output sktr-review.json
 sktr graph --format mermaid --output architecture.mmd
+sktr graph --scope repository --dependencies-of controllers
 ```
 
 The example keeps AI disabled and does not require credentials.

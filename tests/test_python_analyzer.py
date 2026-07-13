@@ -154,3 +154,58 @@ def test_removed_public_symbol_is_available_to_deterministic_rules() -> None:
     issues = PublicApiChangedRule().evaluate(system, context=AnalysisContext(diff=diff).review)
 
     assert [issue.metadata["symbol"] for issue in issues] == ["create_order"]
+
+
+def test_python_repository_snapshot_resolves_targets_without_working_tree_files(tmp_path: Path) -> None:
+    path = "src/orders/service.py"
+    target = "packages/internal_api/__init__.py"
+    diff = GitDiff(
+        repository_root=str(tmp_path),
+        changed_files=[path, target],
+        current_file_contents={path: "import internal_api\n", target: ""},
+        metadata={"graph_scope": "repository", "repository_revision": "abc123"},
+    )
+
+    dependency = PythonAstAnalyzer().analyze(AnalysisContext(diff=diff)).modules[0].files[0].dependencies[0]
+
+    assert dependency.scope.value == "internal"
+    assert dependency.target_path == target
+
+
+def test_python_function_metrics_measure_body_instead_of_multiline_signature() -> None:
+    path = "cli.py"
+    source = "def graph(\n    config,\n    output,\n    scope,\n):\n    value = scope\n    return value\n"
+    diff = GitDiff(
+        changed_files=[path],
+        file_changes=[FileChange(path=path, status="modified")],
+        current_file_contents={path: source},
+    )
+    system = PythonAstAnalyzer().analyze(AnalysisContext(diff=diff))
+    KnowledgeEnrichmentEngine.default().enrich(system, diff)
+    symbol = system.modules[0].files[0].symbols[0]
+
+    assert symbol.metadata["body_lines"] == 2
+    assert symbol.metadata["metrics"]["estimated_size"] == 2
+
+
+def test_python_new_import_path_does_not_duplicate_existing_module_edge() -> None:
+    path = "packages/sktr_git/provider.py"
+    diff = GitDiff(
+        changed_files=[path],
+        file_changes=[FileChange(path=path, status="modified")],
+        base_file_contents={path: "from sktr_core.plugins import GitDiff\n"},
+        current_file_contents={
+            path: (
+                "from sktr_core.model import FileChange\n"
+                "from sktr_core.plugins import GitDiff\n"
+            )
+        },
+    )
+    system = PythonAstAnalyzer().analyze(AnalysisContext(diff=diff))
+    KnowledgeEnrichmentEngine.default().enrich(system, diff)
+
+    assert all(
+        dependency.metadata["metrics"]["new_dependency"] is False
+        for dependency in system.modules[0].files[0].dependencies
+    )
+    assert NewDependencyDetectedRule().evaluate(system, AnalysisContext(diff=diff).review) == []

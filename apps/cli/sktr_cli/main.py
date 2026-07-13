@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from contextlib import AbstractContextManager, nullcontext
-from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -17,7 +16,7 @@ from sktr_core.plugins import MissingPluginError, PluginRegistry
 from sktr_core.version import SKTR_VERSION
 from sktr_ai import NullAIProvider, resolve_openai_api_key
 from sktr_enrichment import KnowledgeEnrichmentEngine
-from sktr_graph import GraphBuilder, GraphLevel
+from sktr_graph import Graph, GraphBuilder, GraphLevel, GraphQuery, GraphScope
 from sktr_git import ReviewScope, SubprocessGitProvider
 from sktr_cli.init_flow import (
     InitAnswers,
@@ -54,11 +53,7 @@ def main(
 ) -> None:
     """SKTR - System Knowledge & Technical Review."""
     if show_version:
-        try:
-            installed_version = version("sktr")
-        except PackageNotFoundError:
-            installed_version = SKTR_VERSION
-        typer.echo(f"sktr {installed_version}")
+        typer.echo(f"sktr {SKTR_VERSION}")
         raise typer.Exit()
 
 
@@ -253,33 +248,156 @@ def graph(
         "--level",
         help="Graph level: module or file.",
     ),
+    graph_scope: GraphScope = typer.Option(
+        GraphScope.CHANGES,
+        "--scope",
+        help="Graph source: reviewed changes or the repository.",
+    ),
+    branch: bool = typer.Option(
+        False,
+        "--branch",
+        help="Graph the current branch against its merge-base with the base branch.",
+    ),
+    base: str | None = typer.Option(
+        None,
+        "--base",
+        help="Base branch for changed-node context. Defaults to config or main.",
+    ),
+    commit: str | None = typer.Option(
+        None,
+        "--commit",
+        help="Graph a commit against its parent.",
+    ),
+    focus: str | None = typer.Option(None, "--focus", help="Show one node and its direct neighborhood."),
+    cycles: bool = typer.Option(False, "--cycles", help="Show only dependency cycles."),
+    dependencies_of: str | None = typer.Option(
+        None, "--dependencies-of", help="Show all transitive dependencies of a node."
+    ),
+    dependents_of: str | None = typer.Option(
+        None, "--dependents-of", help="Show all transitive dependents of a node."
+    ),
 ) -> None:
-    """Generate a dependency graph from changed code."""
-    if graph_format != "mermaid":
-        raise typer.BadParameter("Unsupported graph format. Supported formats: mermaid.", param_hint="--format")
-
+    """Generate a dependency graph from changes or repository architecture."""
     config = _require_config(config_file)
     registry = PluginRegistry.discover()
+    _validate_graph_request(graph_format, focus, cycles, dependencies_of, dependents_of)
+    review_scope = _review_scope(branch=branch, base=base, commit=commit)
     with _progress("Analyzing dependencies and building the graph..."):
-        result = _build_review_result(
-            scope=ReviewScope.WORKING_TREE,
-            base_branch=config.git.default_base_branch,
-            commit=None,
+        dependency_graph = _build_graph_for_request(
+            config_file=config_file,
+            registry=registry,
+            graph_scope=graph_scope,
+            review_scope=review_scope,
+            base_branch=base or config.git.default_base_branch,
+            commit=commit,
+            level=level,
+        )
+        dependency_graph = _select_graph_view(
+            dependency_graph,
+            focus=focus,
+            cycles=cycles,
+            dependencies_of=dependencies_of,
+            dependents_of=dependents_of,
+        )
+    _write_graph(dependency_graph, registry, graph_format, output)
+
+
+def _validate_graph_request(
+    graph_format: str,
+    focus: str | None,
+    cycles: bool,
+    dependencies_of: str | None,
+    dependents_of: str | None,
+) -> None:
+    if graph_format != "mermaid":
+        raise typer.BadParameter(
+            "Unsupported graph format. Supported formats: mermaid.",
+            param_hint="--format",
+        )
+    selectors = [focus is not None, cycles, dependencies_of is not None, dependents_of is not None]
+    if sum(selectors) > 1:
+        raise typer.BadParameter(
+            "Use only one of --focus, --cycles, --dependencies-of, or --dependents-of."
+        )
+
+
+def _build_graph_for_request(
+    *,
+    config_file: Path | None,
+    registry: PluginRegistry,
+    graph_scope: GraphScope,
+    review_scope: ReviewScope,
+    base_branch: str,
+    commit: str | None,
+    level: GraphLevel,
+) -> Graph:
+    change_result = _build_review_result(
+        scope=review_scope,
+        base_branch=base_branch,
+        commit=commit,
+        registry=registry,
+        ai_override=False,
+        config_path=config_file,
+    )
+    graph_result = change_result
+    if graph_scope == GraphScope.REPOSITORY:
+        graph_result = _build_repository_result(
             registry=registry,
             config_path=config_file,
+            revision=commit if review_scope == ReviewScope.COMMIT else None,
         )
-        dependency_graph = GraphBuilder().build(result.system, level=level)
-    if not dependency_graph.edges:
+    return GraphBuilder().build(
+        graph_result.system,
+        level=level,
+        changed_files=set(change_result.context.changed_files),
+    )
+
+
+def _select_graph_view(
+    graph: Graph,
+    *,
+    focus: str | None,
+    cycles: bool,
+    dependencies_of: str | None,
+    dependents_of: str | None,
+) -> Graph:
+    query = GraphQuery()
+    try:
+        if focus is not None:
+            return query.focus(graph, focus)
+        if cycles:
+            return query.cycles(graph)
+        if dependencies_of is not None:
+            return query.dependencies_of(graph, dependencies_of)
+        if dependents_of is not None:
+            return query.dependents_of(graph, dependents_of)
+        return graph
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+
+
+def _write_graph(
+    graph: Graph,
+    registry: PluginRegistry,
+    graph_format: str,
+    output: Path | None,
+) -> None:
+    if not graph.nodes:
         _fail(
             "No dependency graph could be generated.\n\n"
-            "SKTR found no resolvable dependencies in the reviewed changes.\n\n"
-            "Change or stage files with internal dependencies, then run `sktr graph` again."
+            "SKTR found no resolvable dependencies or matching internal nodes for this graph.\n\n"
+            "Try `sktr graph --scope repository` or choose a different focused view."
+        )
+    if len(graph.nodes) > 100 and output is None:
+        typer.echo(
+            f"Graph contains {len(graph.nodes)} nodes; consider --focus or --output.",
+            err=True,
         )
     try:
         graph_output = registry.require("output", graph_format).plugin.create_output()
     except MissingPluginError as error:
         raise typer.BadParameter(str(error), param_hint="--format") from error
-    graph_output.write(dependency_graph, str(output) if output is not None else None)
+    graph_output.write(graph, str(output) if output is not None else None)
 
 
 @plugins_app.command("list")
@@ -427,6 +545,29 @@ def _build_review_result(
         run_ai=run_ai,
     )
     return pipeline.run()
+
+
+def _build_repository_result(
+    *,
+    registry: PluginRegistry | None = None,
+    config_path: Path | None = None,
+    revision: str | None = None,
+) -> ReviewResult:
+    config = _require_config(config_path)
+    plugin_registry = registry or PluginRegistry.discover()
+    try:
+        analyzers = [
+            plugin_registry.require("analyzer", name).plugin.create_analyzer()
+            for name in config.plugins.analyzers
+        ]
+    except MissingPluginError as error:
+        _fail(_missing_plugin_message(error))
+    git_provider = SubprocessGitProvider()
+    snapshot = filter_git_diff(
+        git_provider.repository_snapshot(revision=revision),
+        config.review.exclude,
+    )
+    return ReviewPipeline(diff=snapshot, analyzers=analyzers).run()
 
 
 def _require_config(path: Path | None = None) -> SKTRConfig:

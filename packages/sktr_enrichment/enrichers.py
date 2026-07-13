@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import PurePosixPath
 
-from sktr_core.model import Dependency, DependencyKind, DependencyScope, Module, SourceFile, Symbol, System
+from sktr_core.model import APIExposure, Dependency, DependencyKind, DependencyScope, Module, SourceFile, Symbol, System
 from sktr_core.plugins import GitDiff
 
 LARGE_FILE_CHANGED_LINES = 300
@@ -38,21 +38,51 @@ class SymbolMetricsEnricher:
                 str(value) for value in source_file.metadata.get("baseline_symbols", [])
             }
             current_symbols = {_symbol_identity(symbol) for symbol in source_file.symbols}
+            baseline_public_symbols = {
+                str(value) for value in source_file.metadata.get("baseline_public_symbols", [])
+            }
+            current_public_symbols = {
+                _symbol_identity(symbol)
+                for symbol in source_file.symbols
+                if symbol.api_exposure == APIExposure.EXPORTED
+            }
             source_file.metadata["removed_symbols"] = sorted(baseline_symbols - current_symbols)
             source_file.metadata["new_symbols"] = sorted(current_symbols - baseline_symbols)
+            source_file.metadata["removed_public_symbols"] = sorted(
+                baseline_public_symbols - current_public_symbols
+            )
+            source_file.metadata["new_public_symbols"] = sorted(
+                current_public_symbols - baseline_public_symbols
+            )
             change_status = changed_paths.get(source_file.path).status if source_file.path in changed_paths else "unchanged"
             for symbol in source_file.symbols:
-                symbol.metadata["metrics"] = {
+                metrics: dict[str, object] = {
                     "estimated_size": _symbol_size(symbol),
                     "change_status": change_status,
                     "dependency_count": len(source_file.dependencies),
                 }
+                for key in (
+                    "complexity",
+                    "statement_count",
+                    "nested_function_count",
+                    "declarative_ratio",
+                    "role",
+                ):
+                    if key in symbol.metadata:
+                        metrics[key] = symbol.metadata[key]
+                symbol.metadata["metrics"] = metrics
 
 
 class DependencyEnricher:
     def enrich(self, system: System, diff: GitDiff) -> None:
         changed_paths = {change.path for change in diff.file_changes}
         known_modules = {_source_module(source_file) for source_file in _source_files(system)}
+        baseline_edges = {
+            (_source_module(source_file), str(target_module))
+            for source_file in _source_files(system)
+            for target_module in _list(source_file.metadata.get("baseline_dependency_modules"))
+            if target_module
+        }
         for source_file in _source_files(system):
             source_module = _source_module(source_file)
             baseline_dependencies = {
@@ -67,7 +97,11 @@ class DependencyEnricher:
                 if scope == DependencyScope.UNKNOWN.value:
                     scope = str(dependency.metadata.get("scope", "unknown"))
                 dependency.metadata["metrics"] = {
-                    "new_dependency": dependency.target not in baseline_dependencies,
+                    "new_dependency": (
+                        (source_module, target_module) not in baseline_edges
+                        if target_module
+                        else dependency.target not in baseline_dependencies
+                    ),
                     "removed_dependency": False,
                     "cross_module_dependency": cross_module
                     and (scope == "internal" or target_module in known_modules),
@@ -162,6 +196,10 @@ class PriorityEnricher:
 
 class SummaryEnricher:
     def enrich(self, system: System, diff: GitDiff) -> None:
+        changed_paths = {change.path for change in diff.file_changes}
+        changed_source_files = [
+            source_file for source_file in _source_files(system) if source_file.path in changed_paths
+        ]
         changed_modules = {
             _source_module(source_file)
             for source_file in _source_files(system)
@@ -197,6 +235,18 @@ class SummaryEnricher:
             "cross_module_dependencies": len(cross_module_dependencies),
             "high_risk_files": len(high_risk_files),
             "high_priority_reviews": len(high_priority_reviews),
+            "production_changed_files": len(
+                [source_file for source_file in changed_source_files if not _is_test_path(source_file.path)]
+            ),
+            "test_changed_files": len(
+                [change for change in diff.file_changes if _is_test_path(change.path)]
+            ),
+            "documentation_changed_files": len(
+                [change for change in diff.file_changes if _is_documentation_path(change.path)]
+            ),
+            "public_api_changes": sum(
+                _public_symbol_changes(source_file) for source_file in changed_source_files
+            ),
         }
 
 
@@ -204,7 +254,43 @@ def _source_files(system: System) -> list[SourceFile]:
     return [source_file for module in system.modules for source_file in module.files]
 
 
+def _list(value: object) -> list[object]:
+    return value if isinstance(value, list) else []
+
+
+def _is_test_path(path: str) -> bool:
+    normalized_path = path.lower().replace("\\", "/")
+    normalized = f"/{normalized_path}"
+    name = normalized.rsplit("/", 1)[-1]
+    return (
+        "/tests/" in normalized
+        or "/test/" in normalized
+        or "/src/test/" in normalized
+        or name.startswith("test_")
+        or "_test." in name
+        or ".test." in name
+        or name.endswith("test.java")
+    )
+
+
+def _is_documentation_path(path: str) -> bool:
+    normalized = path.lower().replace("\\", "/")
+    name = normalized.rsplit("/", 1)[-1]
+    return normalized.startswith("docs/") or name.startswith("readme") or name.endswith(".md")
+
+
+def _public_symbol_changes(source_file: SourceFile) -> int:
+    values = [
+        *_list(source_file.metadata.get("new_public_symbols")),
+        *_list(source_file.metadata.get("removed_public_symbols")),
+    ]
+    return sum(1 for value in values if not str(value).split(":", 1)[-1].split(".")[-1].startswith("_"))
+
+
 def _symbol_size(symbol: Symbol) -> int:
+    body_lines = symbol.metadata.get("body_lines")
+    if isinstance(body_lines, int):
+        return body_lines
     if symbol.location is None:
         return 0
     if symbol.location.start_line is None or symbol.location.end_line is None:

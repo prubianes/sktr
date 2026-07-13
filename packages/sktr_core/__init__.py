@@ -1,6 +1,7 @@
 """Language-agnostic core for SKTR."""
 
 from sktr_core.model import (
+    APIExposure,
     AIReview,
     AnalysisDiagnostic,
     Dependency,
@@ -18,12 +19,14 @@ from sktr_core.model import (
     SourceFile,
     Symbol,
     SymbolKind,
+    SymbolVisibility,
     System,
 )
 from sktr_core.version import SKTR_VERSION
 
 __all__ = [
     "AIReview",
+    "APIExposure",
     "AnalysisDiagnostic",
     "Dependency",
     "DependencyKind",
@@ -40,6 +43,7 @@ __all__ = [
     "SourceFile",
     "Symbol",
     "SymbolKind",
+    "SymbolVisibility",
     "System",
     "SKTR_VERSION",
 ]

@@ -71,7 +71,7 @@ To enable OpenAI-powered features, replace the final section with:
 ai:
   enabled: true
   provider: openai
-  model: gpt-5-mini
+  model: gpt-5.6-terra
 ```
 
 Do not store API keys in `sktr.yml`.
@@ -111,12 +111,19 @@ validate the configuration.
   optional human-readable reason.
 
 Rules consume the enriched knowledge model, not raw Python AST objects.
+Large-function sizing uses executable body metrics; mostly declarative UI
+components receive a higher effective threshold. Public API removals require
+explicit analyzer exposure evidence. Missing-test findings require detected test
+infrastructure. Large non-source changes, such as stylesheets, are Low review
+surfaces rather than Medium source-maintainability findings.
 
 ### `ai`
 
 - `enabled`: whether AI features run by default.
 - `provider`: installed provider name; required when enabled.
-- `model`: provider model override.
+- `model`: provider model override. Interactive init offers `gpt-5.6-terra`
+  (balanced), `gpt-5.6-luna` (efficient), `gpt-5.6-sol` (quality-first), and a
+  custom model ID. Existing model IDs remain valid.
 
 When `enabled` is `false`, omit `provider` and `model`. Use `--ai`, `--no-ai`, and
 `--model` for one-run overrides.

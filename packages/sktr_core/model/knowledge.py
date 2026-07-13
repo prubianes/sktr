@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from sktr_core.model.enums import DependencyKind, DependencyScope, DiagnosticSeverity, SymbolKind
+from sktr_core.model.enums import APIExposure, DependencyKind, DependencyScope, DiagnosticSeverity, SymbolKind, SymbolVisibility
 
 
 class Location(BaseModel):
@@ -17,6 +17,8 @@ class Symbol(BaseModel):
     name: str
     kind: SymbolKind = SymbolKind.UNKNOWN
     owner: str | None = None
+    visibility: SymbolVisibility = SymbolVisibility.UNKNOWN
+    api_exposure: APIExposure = APIExposure.UNKNOWN
     location: Location | None = None
     metadata: dict[str, object] = Field(default_factory=dict)
 

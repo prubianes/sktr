@@ -7,8 +7,14 @@ from sktr_git import ReviewScope, SubprocessGitProvider
 
 
 class FakeGitRunner:
-    def __init__(self, outputs: dict[tuple[str, ...], str] | None = None) -> None:
+    def __init__(
+        self,
+        outputs: dict[tuple[str, ...], str] | None = None,
+        *,
+        root: Path | None = None,
+    ) -> None:
         self.outputs = outputs or {}
+        self.root = root or Path("/repo")
         self.calls: list[list[str]] = []
 
     def __call__(
@@ -23,7 +29,7 @@ class FakeGitRunner:
         self.calls.append(args)
         output = self.outputs.get(tuple(args), "")
         if args == ["git", "rev-parse", "--show-toplevel"]:
-            output = "/repo\n"
+            output = f"{self.root}\n"
         return subprocess.CompletedProcess(args=args, returncode=0, stdout=output, stderr="")
 
 
@@ -99,3 +105,43 @@ def test_commit_review_diffs_commit_against_parent() -> None:
     assert diff.metadata["diff_target"] == "HEAD~1^ HEAD~1"
     assert diff.changed_files == ["old.py"]
     assert ["git", "diff", "HEAD~1^", "HEAD~1"] in runner.calls
+
+
+def test_repository_snapshot_reads_git_managed_text_files(tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/app.py").write_text("import service\n", encoding="utf-8")
+    (tmp_path / "README.md").write_text("# App\n", encoding="utf-8")
+    runner = FakeGitRunner(
+        {
+            (
+                "git",
+                "ls-files",
+                "--cached",
+                "--others",
+                "--exclude-standard",
+            ): "src/app.py\nREADME.md\nmissing.txt\n",
+        },
+        root=tmp_path,
+    )
+
+    snapshot = SubprocessGitProvider(runner=runner).repository_snapshot()
+
+    assert snapshot.changed_files == ["README.md", "src/app.py"]
+    assert snapshot.current_file_contents["src/app.py"] == "import service\n"
+    assert all(change.status == "unchanged" for change in snapshot.file_changes)
+    assert snapshot.metadata["graph_scope"] == "repository"
+
+
+def test_repository_snapshot_can_read_a_historical_revision(tmp_path: Path) -> None:
+    runner = FakeGitRunner(
+        {
+            ("git", "ls-tree", "-r", "--name-only", "abc123"): "src/app.py\n",
+            ("git", "show", "abc123:src/app.py"): "from historical import service\n",
+        },
+        root=tmp_path,
+    )
+
+    snapshot = SubprocessGitProvider(runner=runner).repository_snapshot(revision="abc123")
+
+    assert snapshot.current_file_contents == {"src/app.py": "from historical import service\n"}
+    assert snapshot.metadata["repository_revision"] == "abc123"

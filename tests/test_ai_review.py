@@ -30,7 +30,7 @@ runner = CliRunner()
 
 def test_ai_review_model_contains_overview_and_recommendations() -> None:
     review = _ai_review()
-    result = ReviewResult(status="foundation ready", ai_review=review)
+    result = ReviewResult(status="review complete", ai_review=review)
 
     assert result.ai_review is not None
     assert result.ai_review.overview == "Orders gained a payment dependency."
@@ -153,7 +153,7 @@ def test_cli_ai_and_no_ai_select_expected_override(monkeypatch) -> None:
 
     def build(**kwargs) -> ReviewResult:
         calls.append((kwargs["ai_override"], kwargs["model_override"]))
-        return ReviewResult(status="foundation ready")
+        return ReviewResult(status="review complete")
 
     monkeypatch.setattr(cli_main, "_build_review_result", build)
     with _isolated(Path.cwd() / ".tmp-ai-cli-test"):
@@ -169,7 +169,7 @@ def test_cli_ai_and_no_ai_select_expected_override(monkeypatch) -> None:
 
 
 def test_outputs_and_artifact_use_single_ai_review() -> None:
-    result = ReviewResult(status="foundation ready", ai_review=_ai_review())
+    result = ReviewResult(status="review complete", ai_review=_ai_review())
     terminal = TerminalOutput().render(result)
     markdown = MarkdownOutput().render(result)
     artifact = review_result_to_artifact(result)

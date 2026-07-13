@@ -29,6 +29,7 @@ class ReviewContext(BaseModel):
     changed_files: list[str] = Field(default_factory=list)
     file_changes: list[FileChange] = Field(default_factory=list)
     excluded_files: list[str] = Field(default_factory=list)
+    repository_files: list[str] = Field(default_factory=list)
     diff_summary: str | None = None
     metadata: dict[str, str] = Field(default_factory=dict)
 

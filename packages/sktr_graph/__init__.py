@@ -1,5 +1,5 @@
-from sktr_graph.builder import GraphBuilder
-from sktr_graph.model import Graph, GraphEdge, GraphLevel, GraphNode
+from sktr_graph.builder import GraphBuilder, GraphQuery
+from sktr_graph.model import Graph, GraphEdge, GraphLevel, GraphNode, GraphScope
 from sktr_graph.output import MermaidGraphOutput
 from sktr_core.plugins import PluginMetadata
 from sktr_core.version import SKTR_VERSION
@@ -23,6 +23,8 @@ __all__ = [
     "GraphEdge",
     "GraphLevel",
     "GraphNode",
+    "GraphQuery",
+    "GraphScope",
     "MermaidOutputPlugin",
     "MermaidGraphOutput",
 ]

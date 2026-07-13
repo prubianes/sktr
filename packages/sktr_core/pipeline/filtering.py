@@ -27,6 +27,9 @@ def filter_git_diff(diff: GitDiff, patterns: list[str]) -> GitDiff:
                 path: source for path, source in diff.current_file_contents.items() if path not in excluded_set
             },
             "excluded_files": excluded,
+            "repository_files": [
+                path for path in diff.repository_files if not spec.match_file(path)
+            ],
             "metadata": metadata,
         },
         deep=True,

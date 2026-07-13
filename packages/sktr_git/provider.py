@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 from typing import Protocol
 
+from sktr_core.model import FileChange
 from sktr_core.plugins import GitDiff
 from sktr_git.diff import parse_diff_stats
 from sktr_git.scope import ReviewScope
@@ -49,6 +50,7 @@ class SubprocessGitProvider:
         name_status = self._git(repository_root, "diff", "--name-status", "--find-renames", *diff_target)
         numstat = self._git(repository_root, "diff", "--numstat", "--find-renames", *diff_target)
         file_changes = parse_diff_stats(name_status, numstat)
+        repository_files = self._repository_files(repository_root)
         base_revision, current_revision = self._snapshot_revisions(diff_target)
         base_contents: dict[str, str] = {}
         current_contents: dict[str, str] = {}
@@ -74,10 +76,12 @@ class SubprocessGitProvider:
             file_changes=file_changes,
             base_file_contents=base_contents,
             current_file_contents=current_contents,
+            repository_files=repository_files,
             metadata={
                 "review_scope": self.scope.value,
                 "base_branch": self.base_branch,
                 "diff_target": " ".join(diff_target),
+                "repository_files_indexed": "true",
             },
         )
 
@@ -96,6 +100,57 @@ class SubprocessGitProvider:
 
     def changed_files(self) -> list[str]:
         return self.current_diff().changed_files
+
+    def _repository_files(self, repository_root: Path) -> list[str]:
+        listed = self._git(
+            repository_root,
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+        )
+        return sorted({line for line in listed.splitlines() if line})
+
+    def repository_snapshot(self, *, revision: str | None = None) -> GitDiff:
+        """Return readable Git-managed source candidates as a normalized snapshot."""
+        repository_root = self.repository_root()
+        if repository_root is None:
+            return GitDiff()
+        listed = (
+            self._git(repository_root, "ls-tree", "-r", "--name-only", revision)
+            if revision
+            else self._git(
+                repository_root,
+                "ls-files",
+                "--cached",
+                "--others",
+                "--exclude-standard",
+            )
+        )
+        paths: list[str] = []
+        contents: dict[str, str] = {}
+        for path in sorted({line for line in listed.splitlines() if line}):
+            source = (
+                self._git(repository_root, "show", f"{revision}:{path}")
+                if revision
+                else self._read_working_file(repository_root, path)
+            )
+            if source is None:
+                continue
+            paths.append(path)
+            contents[path] = source
+        return GitDiff(
+            repository_root=str(repository_root),
+            changed_files=paths,
+            file_changes=[FileChange(path=path, status="unchanged") for path in paths],
+            current_file_contents=contents,
+            repository_files=paths,
+            metadata={
+                "graph_scope": "repository",
+                "repository_files_indexed": "true",
+                **({"repository_revision": revision} if revision else {}),
+            },
+        )
 
     def repository_root(self) -> Path | None:
         result = self.runner(

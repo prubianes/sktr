@@ -1,13 +1,15 @@
 # SKTR v1.0 Release Checklist
 
-Implementation milestones are tracked in the [v0.16-v0.18 roadmap](roadmap.md).
+Implementation milestones are tracked in the [v0.16-v0.20 roadmap](roadmap.md).
 
 ## Functionality
 
 - [x] `sktr init --yes` works
 - [x] `sktr review` works without AI
-- [ ] `sktr review --ai` works with OpenAI configured (requires a live credential check)
+- [x] `sktr review --ai` works with OpenAI configured (live credential verified by project owner)
 - [x] `sktr graph` works
+- [x] Repository and change graph scopes pass the v0.19 acceptance checks
+- [x] Focused, cycle, dependency, and dependent graph views work
 - [x] Markdown output works
 - [x] JSON output works
 - [x] Config loading works
@@ -17,7 +19,7 @@ Implementation milestones are tracked in the [v0.16-v0.18 roadmap](roadmap.md).
 
 ## Quality
 
-- [x] Tests pass (`144 passed`)
+- [x] Tests pass (`177 passed` on Python 3.13 and 3.14)
 - [x] Type checks pass, if configured (no type checker configured)
 - [x] Lint passes, if configured (no linter configured)
 - [x] No API keys in examples
@@ -39,7 +41,7 @@ Implementation milestones are tracked in the [v0.16-v0.18 roadmap](roadmap.md).
 
 - [x] Package metadata reviewed
 - [x] CLI entry point works
-- [x] Version updated (`0.18.0`)
+- [x] Version updated (`0.20.0`)
 - [x] License included
 - [x] Wheel and source distribution build successfully
 - [x] Built wheel installs in a clean Python 3.13+ environment

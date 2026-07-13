@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from sktr_core.model import Dependency, DependencyKind, FileChange, Location, Module, SourceFile, Symbol, SymbolKind, System
+from sktr_core.model import APIExposure, Dependency, DependencyKind, DependencyScope, FileChange, Location, Module, ReviewContext, SourceFile, Symbol, SymbolKind, System, SymbolVisibility
 from sktr_core.pipeline import ReviewPipeline
 from sktr_core.plugins import GitDiff
 from sktr_enrichment import KnowledgeEnrichmentEngine
+from sktr_rules import NewDependencyDetectedRule
 
 
 def test_file_metrics() -> None:
@@ -65,7 +66,42 @@ def test_summary_generation() -> None:
         "cross_module_dependencies": 6,
         "high_risk_files": 1,
         "high_priority_reviews": 1,
+        "production_changed_files": 1,
+        "test_changed_files": 0,
+        "documentation_changed_files": 0,
+        "public_api_changes": 2,
     }
+
+
+def test_existing_normalized_module_edge_is_not_a_new_dependency() -> None:
+    dependency = Dependency(
+        source="packages/sktr_git/provider.py",
+        target="sktr_core.model",
+        kind=DependencyKind.IMPORT,
+        scope=DependencyScope.INTERNAL,
+        source_module="sktr_git",
+        target_module="sktr_core",
+    )
+    source_file = SourceFile(
+        path="packages/sktr_git/provider.py",
+        module="sktr_git",
+        dependencies=[dependency],
+        metadata={
+            "baseline_dependencies": ["sktr_core.plugins"],
+            "baseline_dependency_modules": ["sktr_core"],
+        },
+    )
+    diff = GitDiff(
+        changed_files=[source_file.path],
+        file_changes=[FileChange(path=source_file.path, status="modified")],
+    )
+    system = KnowledgeEnrichmentEngine.default().enrich(
+        System(modules=[Module(name="python", files=[source_file])]),
+        diff,
+    )
+
+    assert dependency.metadata["metrics"]["new_dependency"] is False
+    assert NewDependencyDetectedRule().evaluate(system, ReviewContext()) == []
 
 
 def test_pipeline_adds_knowledge_summary_to_review_result() -> None:
@@ -102,11 +138,15 @@ def _raw_system() -> System:
                                 name="OrderService",
                                 kind=SymbolKind.CLASS,
                                 location=Location(file_path="orders/service.py", start_line=1, end_line=20),
+                                visibility=SymbolVisibility.PUBLIC,
+                                api_exposure=APIExposure.EXPORTED,
                             ),
                             Symbol(
                                 name="create_order",
                                 kind=SymbolKind.FUNCTION,
                                 location=Location(file_path="orders/service.py", start_line=21, end_line=120),
+                                visibility=SymbolVisibility.PUBLIC,
+                                api_exposure=APIExposure.EXPORTED,
                             ),
                         ],
                         dependencies=[

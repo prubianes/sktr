@@ -17,6 +17,12 @@ MISSING_API_KEY_WARNING = (
     "OpenAI provider is configured, but no API key was found. "
     "Set SKTR_OPENAI_API_KEY or OPENAI_API_KEY to enable AI features."
 )
+DEFAULT_OPENAI_MODEL = "gpt-5.6-terra"
+OPENAI_MODEL_PROFILES = [
+    ("Balanced - GPT-5.6 Terra (recommended)", "gpt-5.6-terra"),
+    ("Fast - GPT-5.6 Luna", "gpt-5.6-luna"),
+    ("Best quality - GPT-5.6 Sol", "gpt-5.6-sol"),
+]
 
 
 @dataclass(frozen=True)
@@ -139,7 +145,7 @@ class OpenAIProvider:
             )
 
     def _model(self) -> str:
-        return self.model or "gpt-5-mini"
+        return self.model or DEFAULT_OPENAI_MODEL
 
 
 class OpenAIProviderPlugin:

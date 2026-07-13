@@ -5,7 +5,14 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from sktr_cli.main import app
-from sktr_cli.init_flow import InitPreset, ProjectDetection, default_answers, render_config, validate_answers
+from sktr_cli.init_flow import (
+    InitPreset,
+    ProjectDetection,
+    default_answers,
+    prompt_for_answers,
+    render_config,
+    validate_answers,
+)
 from sktr_core.plugins import PluginRegistry
 
 runner = CliRunner()
@@ -88,6 +95,7 @@ def test_init_customize_settings() -> None:
                     "n",
                     "y",
                     "",
+                    "__custom__",
                     "gpt-5-mini",
                     "y",
                 ]
@@ -150,7 +158,47 @@ def test_init_yes_can_enable_detected_ai_provider_without_prompts(monkeypatch) -
         config = Path("sktr.yml").read_text(encoding="utf-8")
         assert "enabled: true" in config
         assert "provider: openai" in config
+        assert "model: gpt-5.6-terra" in config
         assert "not-printed" not in result.output
+
+
+def test_init_openai_model_profiles_include_fast_balanced_quality_and_custom() -> None:
+    from sktr_ai import DEFAULT_OPENAI_MODEL, OPENAI_MODEL_PROFILES
+
+    assert DEFAULT_OPENAI_MODEL == "gpt-5.6-terra"
+    assert [model for _, model in OPENAI_MODEL_PROFILES] == [
+        "gpt-5.6-terra",
+        "gpt-5.6-luna",
+        "gpt-5.6-sol",
+    ]
+
+
+def test_interactive_init_can_select_luna_profile() -> None:
+    class Prompter:
+        def confirm(self, message: str, default: bool = True) -> bool:
+            return True
+
+        def select(self, message, choices, default):
+            if message == "AI provider":
+                return "openai"
+            if message == "OpenAI model":
+                return "gpt-5.6-luna"
+            return default
+
+        def checkbox(self, message, choices, defaults):
+            return defaults
+
+        def text(self, message: str, default: str) -> str:
+            return default
+
+    answers = prompt_for_answers(
+        ProjectDetection(name="app", default_base="main", languages=["Python"], repository="Git"),
+        PluginRegistry.discover(),
+        Prompter(),
+        preset_override=InitPreset.RECOMMENDED,
+    )
+
+    assert answers.ai_model == "gpt-5.6-luna"
 
 
 def test_default_config_remains_valid_when_no_plugins_are_discovered() -> None:

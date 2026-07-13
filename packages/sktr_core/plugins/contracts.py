@@ -15,6 +15,7 @@ class GitDiff(BaseModel):
     base_file_contents: dict[str, str] = Field(default_factory=dict)
     current_file_contents: dict[str, str] = Field(default_factory=dict)
     excluded_files: list[str] = Field(default_factory=list)
+    repository_files: list[str] = Field(default_factory=list)
     metadata: dict[str, str] = Field(default_factory=dict)
 
 

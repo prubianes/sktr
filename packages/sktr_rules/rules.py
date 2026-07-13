@@ -78,7 +78,7 @@ class LargeFileChangedRule:
     threshold: int = 300
     id: str = "change.large_file"
     key: str = "large_file"
-    name: str = "Large file changed"
+    name: str = "Large change surface"
 
     def evaluate(self, system: System, context: ReviewContext) -> list[Issue]:
         issues: list[Issue] = []
@@ -88,12 +88,13 @@ class LargeFileChangedRule:
             changed_lines = int(metrics.get("total_changed_lines", change.added_lines + change.removed_lines))
             if changed_lines < self.threshold:
                 continue
+            analyzed_source = change.path in files_by_path
             issues.append(
                 Issue(
                     id=f"{self.id}:{change.path}",
-                    title="Large file changed",
+                    title=self.name,
                     description=f"{change.path} changed {changed_lines} lines.",
-                    severity=IssueSeverity.MEDIUM,
+                    severity=IssueSeverity.MEDIUM if analyzed_source else IssueSeverity.LOW,
                     category=IssueCategory.MAINTAINABILITY,
                     rule_id=self.id,
                     metadata={
@@ -105,6 +106,7 @@ class LargeFileChangedRule:
                         "removed_lines": str(change.removed_lines),
                         "changed_lines": str(changed_lines),
                         "max_changed_lines": str(self.threshold),
+                        "analyzed_source": str(analyzed_source).lower(),
                     },
                 )
             )
@@ -127,7 +129,14 @@ class LargeFunctionDetectedRule:
                 metrics = _metadata_dict(symbol.metadata.get("metrics"))
                 line_count = int(metrics.get("estimated_size", _line_count(symbol) or 0))
                 change_status = str(metrics.get("change_status", source_file.metadata.get("change_status", "unknown")))
-                if line_count is None or line_count < self.threshold:
+                effective_threshold = self.threshold
+                if (
+                    metrics.get("role") == "ui_component"
+                    and float(metrics.get("declarative_ratio", 0)) >= 0.45
+                    and int(metrics.get("complexity", 1)) <= 15
+                ):
+                    effective_threshold = round(self.threshold * 1.75)
+                if line_count is None or line_count < effective_threshold:
                     continue
                 issues.append(
                     Issue(
@@ -146,10 +155,12 @@ class LargeFunctionDetectedRule:
                             "symbol_kind": symbol.kind.value,
                             "line_count": str(line_count),
                             "change_status": change_status,
-                            "max_lines": str(self.threshold),
-                            "suggestion": (
-                                "Consider extracting validation, orchestration, and persistence into smaller functions."
-                            ),
+                            "max_lines": str(effective_threshold),
+                            "base_max_lines": str(self.threshold),
+                            "symbol_role": str(metrics.get("role", "unknown")),
+                            "complexity": str(metrics.get("complexity", "unknown")),
+                            "declarative_ratio": str(metrics.get("declarative_ratio", "unknown")),
+                            "suggestion": "Consider extracting cohesive responsibilities into smaller functions.",
                         },
                     )
                 )
@@ -296,7 +307,9 @@ class PublicApiChangedRule:
         for source_file in _source_files(system):
             if _is_test_path(source_file.path):
                 continue
-            removed = [str(value) for value in source_file.metadata.get("removed_symbols", [])]
+            removed = [
+                str(value) for value in source_file.metadata.get("removed_public_symbols", [])
+            ]
             removed_set = set(removed)
             for value in removed:
                 kind, _, symbol = value.partition(":")
@@ -339,6 +352,13 @@ class MissingTestsRule:
     def evaluate(self, system: System, context: ReviewContext) -> list[Issue]:
         changed_paths = {change.path for change in context.file_changes}
         source_paths = {source_file.path for source_file in _source_files(system)}
+        repository_indexed = context.metadata.get("repository_files_indexed") == "true"
+        test_infrastructure = bool(system.metadata.get("test_infrastructure_detected")) or any(
+            _is_test_path(path) or _is_test_config_path(path)
+            for path in context.repository_files
+        )
+        if repository_indexed and not test_infrastructure:
+            return []
         if not source_paths or any(_is_test_path(path) for path in changed_paths):
             return []
         affected = sorted(path for path in source_paths if path in changed_paths and not _is_test_path(path))
@@ -428,6 +448,14 @@ def _is_test_path(path: str) -> bool:
         or "_test." in name
         or ".test." in name
         or name.endswith("test.java")
+    )
+
+
+def _is_test_config_path(path: str) -> bool:
+    name = path.lower().replace("\\", "/").rsplit("/", 1)[-1]
+    return (
+        name.startswith(("jest.config.", "vitest.config.", "playwright.config.", "cypress.config."))
+        or name in {"pytest.ini", "tox.ini", "conftest.py"}
     )
 
 

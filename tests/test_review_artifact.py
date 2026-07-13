@@ -70,7 +70,7 @@ def test_review_result_serializes_to_json_artifact() -> None:
     assert artifact["score"] == 82
     assert artifact["risk"] == "medium"
     assert artifact["metadata"]["review"] == {"run_id": "test-run"}
-    assert artifact["review_result"]["status"] == "foundation ready"
+    assert artifact["review_result"]["status"] == "review complete"
 
 
 def test_write_review_artifact_writes_json_file(tmp_path: Path) -> None:
@@ -85,7 +85,7 @@ def test_write_review_artifact_writes_json_file(tmp_path: Path) -> None:
 def _review_result() -> ReviewResult:
     path = "controllers/order_controller.py"
     return ReviewResult(
-        status="foundation ready",
+        status="review complete",
         context=ReviewContext(
             changed_files=[path],
             file_changes=[
