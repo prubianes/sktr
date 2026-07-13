@@ -16,7 +16,9 @@ from sktr_core.model import (
     ReviewContext,
     ReviewResult,
 )
-from sktr_report import JsonOutput, MarkdownOutput, TerminalOutput, output_for_format
+from sktr_core.pipeline import ReviewPipeline
+from sktr_core.plugins import GitDiff
+from sktr_report import JsonOutput, MarkdownOutput, TerminalOutput, output_for_format, review_result_to_json
 
 runner = CliRunner()
 
@@ -118,6 +120,17 @@ def test_terminal_output_preserves_bracketed_route_segments(capsys) -> None:
     TerminalOutput().write(result)
 
     assert "app/[rooms]/roomPageClient.tsx" in capsys.readouterr().out
+
+
+def test_pipeline_timestamp_is_shared_by_all_outputs(monkeypatch) -> None:
+    generated_at = "2026-07-13T12:34:56Z"
+    monkeypatch.setattr("sktr_core.pipeline.review._generated_at", lambda: generated_at)
+    result = ReviewPipeline(diff=GitDiff()).run()
+
+    assert result.metadata["generated_at"] == generated_at
+    assert f"Generated at: {generated_at}" in TerminalOutput().render(result)
+    assert f"Generated at: {generated_at}" in MarkdownOutput().render(result)
+    assert json.loads(review_result_to_json(result))["metadata"]["generated_at"] == generated_at
 
 
 def test_json_output_writes_to_file(tmp_path: Path) -> None:

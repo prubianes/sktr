@@ -1,5 +1,9 @@
 # CI Integration
 
+SKTR's own GitHub Actions CI runs the test and packaging matrix on Python 3.13
+and 3.14. The release workflow uses PyPI trusted publishing; its setup and tag
+procedure are documented in [development.md](development.md#release-process).
+
 SKTR can write a canonical artifact and fail a job based only on deterministic
 issue severity:
 

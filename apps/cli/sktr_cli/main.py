@@ -17,7 +17,7 @@ from sktr_core.version import SKTR_VERSION
 from sktr_ai import NullAIProvider, resolve_openai_api_key
 from sktr_enrichment import KnowledgeEnrichmentEngine
 from sktr_graph import Graph, GraphBuilder, GraphLevel, GraphQuery, GraphScope
-from sktr_git import ReviewScope, SubprocessGitProvider
+from sktr_git import GitProviderError, ReviewScope, SubprocessGitProvider
 from sktr_cli.init_flow import (
     InitAnswers,
     InitPreset,
@@ -529,13 +529,20 @@ def _build_review_result(
         base_branch=base_branch,
         commit=commit,
     )
-    if git_provider.repository_root() is None:
+    try:
+        repository_root = git_provider.repository_root()
+    except GitProviderError as error:
+        _fail(f"Git could not prepare this review: {error}")
+    if repository_root is None:
         _fail(
             "Not inside a Git repository.\n\n"
             "SKTR reviews Git changes and cannot determine a diff here.\n\n"
             "Run this command inside a Git repository, or initialize one with `git init`."
         )
-    git_diff = filter_git_diff(git_provider.current_diff(), config.review.exclude)
+    try:
+        git_diff = filter_git_diff(git_provider.current_diff(), config.review.exclude)
+    except GitProviderError as error:
+        _fail(f"Git could not prepare this review: {error}")
     pipeline = ReviewPipeline(
         diff=git_diff,
         analyzers=analyzers,
@@ -563,10 +570,13 @@ def _build_repository_result(
     except MissingPluginError as error:
         _fail(_missing_plugin_message(error))
     git_provider = SubprocessGitProvider()
-    snapshot = filter_git_diff(
-        git_provider.repository_snapshot(revision=revision),
-        config.review.exclude,
-    )
+    try:
+        snapshot = filter_git_diff(
+            git_provider.repository_snapshot(revision=revision),
+            config.review.exclude,
+        )
+    except GitProviderError as error:
+        _fail(f"Git could not prepare this graph: {error}")
     return ReviewPipeline(diff=snapshot, analyzers=analyzers).run()
 
 

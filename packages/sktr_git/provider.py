@@ -7,6 +7,7 @@ from typing import Protocol
 from sktr_core.model import FileChange
 from sktr_core.plugins import GitDiff
 from sktr_git.diff import parse_diff_stats
+from sktr_git.errors import GitProviderError
 from sktr_git.scope import ReviewScope
 
 
@@ -57,13 +58,13 @@ class SubprocessGitProvider:
         for change in file_changes:
             base_path = change.old_path or change.path
             if change.status != "added" and base_revision:
-                content = self._git(repository_root, "show", f"{base_revision}:{base_path}")
-                if content:
+                content = self._git_optional(repository_root, "show", f"{base_revision}:{base_path}")
+                if content is not None:
                     base_contents[change.path] = content
             if change.status == "deleted":
                 continue
             if current_revision:
-                content = self._git(repository_root, "show", f"{current_revision}:{change.path}")
+                content = self._git_optional(repository_root, "show", f"{current_revision}:{change.path}")
             else:
                 content = self._read_working_file(repository_root, change.path)
             if content is not None:
@@ -131,7 +132,7 @@ class SubprocessGitProvider:
         contents: dict[str, str] = {}
         for path in sorted({line for line in listed.splitlines() if line}):
             source = (
-                self._git(repository_root, "show", f"{revision}:{path}")
+                self._git_optional(repository_root, "show", f"{revision}:{path}")
                 if revision
                 else self._read_working_file(repository_root, path)
             )
@@ -153,28 +154,41 @@ class SubprocessGitProvider:
         )
 
     def repository_root(self) -> Path | None:
-        result = self.runner(
-            ["git", "rev-parse", "--show-toplevel"],
-            cwd=self.cwd,
-            capture_output=True,
-            check=False,
-            text=True,
-        )
+        try:
+            result = self.runner(
+                ["git", "rev-parse", "--show-toplevel"],
+                cwd=self.cwd,
+                capture_output=True,
+                check=False,
+                text=True,
+            )
+        except OSError as error:
+            raise GitProviderError("detect repository root", str(error)) from error
         if result.returncode != 0:
             return None
         return Path(result.stdout.strip())
 
     def _git(self, repository_root: Path, *args: str) -> str:
-        result = self.runner(
-            ["git", *args],
-            cwd=repository_root,
-            capture_output=True,
-            check=False,
-            text=True,
-        )
+        result = self._run_git(repository_root, *args)
         if result.returncode != 0:
-            return ""
+            raise GitProviderError(_operation_name(args), result.stderr)
         return result.stdout
+
+    def _git_optional(self, repository_root: Path, *args: str) -> str | None:
+        result = self._run_git(repository_root, *args)
+        return result.stdout if result.returncode == 0 else None
+
+    def _run_git(self, repository_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+        try:
+            return self.runner(
+                ["git", *args],
+                cwd=repository_root,
+                capture_output=True,
+                check=False,
+                text=True,
+            )
+        except OSError as error:
+            raise GitProviderError(_operation_name(args), str(error)) from error
 
     def _diff_target(self, repository_root: Path) -> list[str]:
         if self.scope == ReviewScope.WORKING_TREE:
@@ -197,3 +211,15 @@ class SubprocessGitProvider:
             return [self.range_spec]
 
         raise ValueError(f"Unsupported review scope: {self.scope}")
+
+
+def _operation_name(args: tuple[str, ...]) -> str:
+    if not args:
+        return "run Git command"
+    if args[0] == "merge-base":
+        return "resolve merge base"
+    if args[0] == "diff":
+        return "read Git diff"
+    if args[0] in {"ls-files", "ls-tree"}:
+        return "list repository files"
+    return f"run git {args[0]}"

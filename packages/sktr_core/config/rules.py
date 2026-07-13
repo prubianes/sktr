@@ -4,6 +4,8 @@ from pathlib import Path
 import tomllib
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+import yaml
+from yaml import YAMLError
 from sktr_core.model import IssueSeverity
 
 DEFAULT_ENABLED_RULES = [
@@ -111,7 +113,16 @@ def load_config(path: Path | None = None) -> SKTRConfig:
         return SKTRConfig()
 
     if config_path.suffix in {".yaml", ".yml"}:
-        data = _load_simple_yaml(config_path)
+        try:
+            loaded = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        except YAMLError as error:
+            raise ValueError(f"Invalid YAML: {error}") from error
+        if loaded is None:
+            data: dict[str, object] = {}
+        elif isinstance(loaded, dict):
+            data = loaded
+        else:
+            raise ValueError("SKTR configuration must be a YAML mapping")
     else:
         with config_path.open("rb") as file:
             data = tomllib.load(file)
@@ -129,164 +140,3 @@ def _default_config_path() -> Path:
         if path.is_file():
             return path
     return Path("sktr.yml")
-
-
-def _load_simple_yaml(path: Path) -> dict[str, object]:
-    data: dict[str, object] = {"project": {}, "git": {}, "review": {}, "plugins": {}, "ai": {}, "rules": {}}
-    section: str | None = None
-    subsection: str | None = None
-    current_dependency: dict[str, str] | None = None
-
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.split("#", 1)[0].rstrip()
-        if not line or line.startswith("#"):
-            continue
-
-        indent = len(line) - len(line.lstrip(" "))
-        stripped = line.strip()
-
-        if indent == 0:
-            section, value = _yaml_key_value(stripped)
-            if section is None:
-                continue
-            subsection = None
-            current_dependency = None
-            if value:
-                data[section] = value
-            else:
-                data.setdefault(section, {})
-            continue
-
-        if section in {"project", "git"}:
-            key, value = _yaml_key_value(stripped)
-            if key is None:
-                continue
-            section_data = data.setdefault(section, {})
-            assert isinstance(section_data, dict)
-            section_data[key] = _coerce_scalar(value)
-            continue
-
-        if section == "review":
-            review = data.setdefault("review", {})
-            assert isinstance(review, dict)
-            if indent == 2:
-                key, value = _yaml_key_value(stripped)
-                if key is None:
-                    continue
-                subsection = key
-                review[key] = _coerce_scalar(value) if value else ([] if key == "exclude" else {})
-                continue
-            if subsection == "exclude" and stripped.startswith("- "):
-                values = review.setdefault("exclude", [])
-                assert isinstance(values, list)
-                values.append(_coerce_scalar(stripped[2:]))
-            continue
-
-        if section == "ai":
-            ai = data.setdefault("ai", {})
-            assert isinstance(ai, dict)
-            if indent == 2:
-                key, value = _yaml_key_value(stripped)
-                if key is None:
-                    continue
-                subsection = key
-                if key == "features" and not value:
-                    ai.setdefault(key, {})
-                else:
-                    ai[key] = _coerce_scalar(value)
-                continue
-            if subsection == "features":
-                key, value = _yaml_key_value(stripped)
-                if key:
-                    features = ai.setdefault("features", {})
-                    assert isinstance(features, dict)
-                    features[key] = _coerce_scalar(value)
-            continue
-
-        if section != "rules":
-            if section == "plugins":
-                plugins = data.setdefault("plugins", {})
-                assert isinstance(plugins, dict)
-                if indent == 2:
-                    key, value = _yaml_key_value(stripped)
-                    if key is None:
-                        continue
-                    subsection = key
-                    if value:
-                        plugins[key] = _coerce_scalar(value)
-                    else:
-                        plugins.setdefault(key, [])
-                    continue
-                if stripped.startswith("- ") and subsection is not None:
-                    values = plugins.setdefault(subsection, [])
-                    assert isinstance(values, list)
-                    values.append(_coerce_scalar(stripped[2:]))
-            continue
-
-        rules = data.setdefault("rules", {})
-        assert isinstance(rules, dict)
-
-        if indent == 2:
-            key, value = _yaml_key_value(stripped)
-            if key is None:
-                continue
-            subsection = key
-            current_dependency = None
-            if key in {"enabled", "forbidden_dependencies"}:
-                rules.setdefault(key, [])
-            elif value:
-                rules[key] = _coerce_scalar(value)
-            else:
-                rules.setdefault(key, {})
-            continue
-
-        if subsection == "enabled" and stripped.startswith("- "):
-            enabled = rules.setdefault("enabled", [])
-            assert isinstance(enabled, list)
-            enabled.append(stripped[2:].strip().strip('"').strip("'"))
-            continue
-
-        if subsection == "forbidden_dependencies" and stripped.startswith("- "):
-            forbidden = rules.setdefault("forbidden_dependencies", [])
-            assert isinstance(forbidden, list)
-            current_dependency = {}
-            forbidden.append(current_dependency)
-            key, value = _yaml_key_value(stripped[2:])
-            if key:
-                current_dependency[key] = value
-            continue
-
-        key, value = _yaml_key_value(stripped)
-        if not key:
-            continue
-
-        if subsection == "forbidden_dependencies" and current_dependency is not None:
-            current_dependency[key] = value
-        elif subsection in {"large_file", "large_function", "fan_out"}:
-            nested = rules.setdefault(subsection, {})
-            assert isinstance(nested, dict)
-            nested[key] = _coerce_scalar(value)
-
-    return data
-
-
-def _yaml_key_value(line: str) -> tuple[str | None, str]:
-    if ":" not in line:
-        return None, ""
-    key, value = line.split(":", 1)
-    return key.strip(), value.strip().strip('"').strip("'")
-
-
-def _coerce_scalar(value: str) -> object:
-    normalized = value.strip().strip('"').strip("'")
-    if normalized == "[]":
-        return []
-    if normalized == "null":
-        return None
-    if normalized == "true":
-        return True
-    if normalized == "false":
-        return False
-    if normalized.isdigit():
-        return int(normalized)
-    return normalized

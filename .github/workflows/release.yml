@@ -1,0 +1,39 @@
+name: Publish release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.13"
+      - name: Verify tag matches package version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          uv run --no-project python -c 'import os, tomllib; version = tomllib.load(open("pyproject.toml", "rb"))["project"]["version"]; expected = f"v{version}"; actual = os.environ["RELEASE_TAG"]; assert actual == expected, f"tag {actual!r} does not match {expected!r}"'
+      - name: Install locked environment
+        run: uv sync --frozen --python 3.13
+      - name: Run release validation
+        run: uv run pytest -q
+      - name: Build distributions
+        run: uv build
+      - name: Verify frozen schema is packaged
+        run: tar -tzf dist/sktr-*.tar.gz | grep 'docs/schema/sktr-review-0.1.schema.json'
+      - name: Publish to PyPI with trusted publishing
+        uses: pypa/gh-action-pypi-publish@release/v1
+

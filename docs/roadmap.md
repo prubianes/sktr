@@ -59,7 +59,7 @@ artifact contract.
 - [x] Add score-neutral, language-agnostic analysis diagnostics.
 - [x] Render diagnostics in terminal and Markdown and serialize them in JSON.
 - [x] Freeze artifact schema `0.1` and publish its JSON Schema.
-- [x] Centralize version `0.18.0` across built-in plugin metadata.
+- [x] Centralize package and built-in plugin version metadata.
 - [x] Add mixed-language, CI, schema, and clean-package validation.
 
 Acceptance: CI receives stable output before a severity-gate exit, parse failures

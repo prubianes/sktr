@@ -51,7 +51,7 @@ def test_cli_reports_version() -> None:
     result = runner.invoke(cli_main.app, ["--version"])
 
     assert result.exit_code == 0
-    assert result.output.strip() == "sktr 0.20.0"
+    assert result.output.strip() == "sktr 1.0.0"
 
 
 def test_review_accepts_explicit_config_path(tmp_path: Path, monkeypatch) -> None:
@@ -92,6 +92,28 @@ def test_review_outside_git_has_actionable_error(tmp_path: Path, monkeypatch) ->
     assert result.exit_code == 1
     assert "Not inside a Git repository" in result.output
     assert "git init" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_invalid_base_fails_without_writing_a_false_clean_artifact(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / "sktr.yml").write_text("project:\n  name: invalid-base\n", encoding="utf-8")
+    _git(tmp_path, "init")
+    _git(tmp_path, "config", "user.email", "sktr@example.test")
+    _git(tmp_path, "config", "user.name", "SKTR Test")
+    _git(tmp_path, "add", "sktr.yml")
+    _git(tmp_path, "commit", "-m", "Initialize")
+    output = tmp_path / "review.json"
+    monkeypatch.chdir(tmp_path)
+
+    result = runner.invoke(
+        cli_main.app,
+        ["review", "--base", "missing-release-base", "--format", "json", "--output", str(output)],
+    )
+
+    assert result.exit_code == 1
+    assert "Git could not prepare this review" in result.output
+    assert "resolve merge base failed" in result.output
+    assert not output.exists()
     assert "Traceback" not in result.output
 
 
@@ -275,14 +297,37 @@ def test_packaging_metadata_matches_release_contract() -> None:
         project = tomllib.load(file)["project"]
 
     assert project["name"] == "sktr"
-    assert project["version"] == "0.20.0"
+    assert project["version"] == "1.0.0"
     assert project["requires-python"] == ">=3.13"
     assert project["readme"] == "README.md"
     assert project["license"] == "MIT"
     assert project["scripts"]["sktr"] == "sktr_cli.main:app"
-    assert {"pydantic>=2.0", "pathspec>=0.12", "questionary>=2.1.1", "rich>=13.0", "typer>=0.12"} <= set(
+    assert {
+        "pydantic>=2.0",
+        "pathspec>=0.12",
+        "PyYAML>=6.0",
+        "questionary>=2.1.1",
+        "rich>=13.0",
+        "typer>=0.12",
+    } <= set(
         project["dependencies"]
     )
+    assert "Development Status :: 5 - Production/Stable" in project["classifiers"]
+    assert project["urls"]["Repository"] == "https://github.com/prubianes/sktr"
+
+
+def test_release_files_package_schema_and_use_trusted_publishing() -> None:
+    manifest = (ROOT / "MANIFEST.in").read_text(encoding="utf-8")
+    ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    release = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+
+    assert "recursive-include docs/schema *.json" in manifest
+    assert "include assets/sktr-logo.png" in manifest
+    assert 'python-version: ["3.13", "3.14"]' in ci
+    assert "docs/schema/sktr-review-0.1.schema.json" in ci
+    assert "id-token: write" in release
+    assert "pypa/gh-action-pypi-publish@release/v1" in release
+    assert "environment: pypi" in release
 
 
 def test_plugin_load_errors_are_reported_by_doctor_validation() -> None:
@@ -305,7 +350,7 @@ def test_plugin_load_errors_are_reported_by_doctor_validation() -> None:
 def test_builtin_plugin_versions_match_package_version() -> None:
     registry = PluginRegistry.discover()
 
-    assert SKTR_VERSION == "0.20.0"
+    assert SKTR_VERSION == "1.0.0"
     assert {record.metadata.version for record in registry.records} == {SKTR_VERSION}
 
 

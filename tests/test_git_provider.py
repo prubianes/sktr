@@ -3,7 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 import subprocess
 
-from sktr_git import ReviewScope, SubprocessGitProvider
+import pytest
+
+from sktr_git import GitProviderError, ReviewScope, SubprocessGitProvider
 
 
 class FakeGitRunner:
@@ -31,6 +33,18 @@ class FakeGitRunner:
         if args == ["git", "rev-parse", "--show-toplevel"]:
             output = f"{self.root}\n"
         return subprocess.CompletedProcess(args=args, returncode=0, stdout=output, stderr="")
+
+
+class FailingGitRunner(FakeGitRunner):
+    def __init__(self, failing_command: tuple[str, ...], stderr: str) -> None:
+        super().__init__()
+        self.failing_command = failing_command
+        self.stderr = stderr
+
+    def __call__(self, args: list[str], **kwargs) -> subprocess.CompletedProcess[str]:
+        if tuple(args) == self.failing_command:
+            return subprocess.CompletedProcess(args=args, returncode=128, stdout="", stderr=self.stderr)
+        return super().__call__(args, **kwargs)
 
 
 def test_working_tree_review_diffs_against_head() -> None:
@@ -145,3 +159,80 @@ def test_repository_snapshot_can_read_a_historical_revision(tmp_path: Path) -> N
 
     assert snapshot.current_file_contents == {"src/app.py": "from historical import service\n"}
     assert snapshot.metadata["repository_revision"] == "abc123"
+
+
+def test_invalid_base_branch_raises_typed_error() -> None:
+    runner = FailingGitRunner(
+        ("git", "merge-base", "missing", "HEAD"),
+        "fatal: Not a valid object name missing\n",
+    )
+
+    with pytest.raises(GitProviderError, match="resolve merge base failed") as raised:
+        SubprocessGitProvider(
+            scope=ReviewScope.BRANCH,
+            base_branch="missing",
+            runner=runner,
+        ).current_diff()
+
+    assert raised.value.operation == "resolve merge base"
+    assert raised.value.message == "fatal: Not a valid object name missing"
+
+
+def test_invalid_commit_raises_instead_of_returning_empty_review() -> None:
+    command = ("git", "diff", "missing^", "missing")
+    runner = FailingGitRunner(command, "fatal: ambiguous argument 'missing^'")
+
+    with pytest.raises(GitProviderError, match="read Git diff failed"):
+        SubprocessGitProvider(
+            scope=ReviewScope.COMMIT,
+            commit="missing",
+            runner=runner,
+        ).current_diff()
+
+
+def test_missing_optional_file_at_revision_does_not_fail_review() -> None:
+    runner = FailingGitRunner(
+        ("git", "show", "HEAD:app.py"),
+        "fatal: path 'app.py' does not exist in 'HEAD'",
+    )
+    runner.outputs[("git", "diff", "--name-status", "--find-renames", "HEAD")] = "M\tapp.py\n"
+    runner.outputs[("git", "diff", "--numstat", "--find-renames", "HEAD")] = "1\t1\tapp.py\n"
+
+    diff = SubprocessGitProvider(runner=runner).current_diff()
+
+    assert diff.changed_files == ["app.py"]
+    assert diff.base_file_contents == {}
+
+
+def test_git_errors_redact_url_credentials() -> None:
+    runner = FailingGitRunner(
+        ("git", "diff", "HEAD"),
+        "fatal: unable to access 'https://secret-user:secret-token@example.test/repo.git/'",
+    )
+
+    with pytest.raises(GitProviderError) as raised:
+        SubprocessGitProvider(runner=runner).current_diff()
+
+    assert "secret-user" not in str(raised.value)
+    assert "secret-token" not in str(raised.value)
+    assert "https://***@example.test/repo.git/" in str(raised.value)
+
+
+def test_repository_without_head_fails_instead_of_returning_empty_review() -> None:
+    runner = FailingGitRunner(
+        ("git", "diff", "HEAD"),
+        "fatal: ambiguous argument 'HEAD': unknown revision",
+    )
+
+    with pytest.raises(GitProviderError, match="read Git diff failed"):
+        SubprocessGitProvider(runner=runner).current_diff()
+
+
+def test_historical_repository_snapshot_failure_is_not_silenced() -> None:
+    runner = FailingGitRunner(
+        ("git", "ls-tree", "-r", "--name-only", "missing"),
+        "fatal: Not a valid object name missing",
+    )
+
+    with pytest.raises(GitProviderError, match="list repository files failed"):
+        SubprocessGitProvider(runner=runner).repository_snapshot(revision="missing")

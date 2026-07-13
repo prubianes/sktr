@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime, timezone
 from typing import Protocol
 
 from sktr_core.model import AIReview, ReviewContext, ReviewResult, System
@@ -91,7 +92,10 @@ class ReviewPipeline:
             ai_review=ai_review,
             knowledge_summary=_knowledge_summary(system),
             messages=messages,
-            metadata={"rules_executed": rules_executed},
+            metadata={
+                "generated_at": _generated_at(),
+                "rules_executed": rules_executed,
+            },
         )
 
     def _merge_systems(self, systems: Sequence[System]) -> System:
@@ -118,3 +122,7 @@ def _knowledge_summary(system: System) -> dict[str, int]:
     if not isinstance(value, dict):
         return {}
     return {str(key): int(metric) for key, metric in value.items() if isinstance(metric, int)}
+
+
+def _generated_at() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")

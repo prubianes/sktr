@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/prubianes/sktr/main/assets/sktr-logo.png" alt="SKTR - System Knowledge & Technical Review" width="420">
+</p>
+
 # SKTR
 
 **System Knowledge & Technical Review**
@@ -199,6 +203,10 @@ sktr plugins doctor
 See the [plugin guide](docs/plugins.md) to build or distribute a plugin.
 
 ## Roadmap
+
+SKTR 1.0 packages the deterministic review, three bundled analyzers, stable JSON
+artifact, architecture graphing, CI gates, and optional AI Review developed
+through v0.20. Post-v1 work remains tracked in the canonical roadmap.
 
 The v0.16-v0.18 roadmap delivered bundled JavaScript/TypeScript and Java
 analyzers, followed by CI severity gates, exclusions, parse diagnostics, and a
