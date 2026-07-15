@@ -1,0 +1,30 @@
+project:
+  name: sktr-mixed-language-ci
+  default_base: main
+review:
+  default_scope: working_tree
+  fail_on: high
+  exclude:
+    - node_modules/
+    - dist/
+    - build/
+    - target/
+plugins:
+  analyzers:
+    - sktr-python
+    - sktr-javascript-typescript
+    - sktr-java
+  rules:
+    - sktr-rules-default
+  outputs:
+    - terminal
+    - markdown
+    - json
+rules:
+  enabled:
+    - new_dependency
+    - large_file
+    - large_function
+    - forbidden_dependency
+ai:
+  enabled: false

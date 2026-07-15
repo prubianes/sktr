@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -8,6 +9,7 @@ from sktr_cli import main as cli_main
 from sktr_core.model import Dependency, DependencyKind, Module, ReviewResult, SourceFile, System
 
 runner = CliRunner()
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 
 def test_graph_command_writes_mermaid_to_stdout(monkeypatch) -> None:
@@ -90,9 +92,9 @@ def test_graph_rejects_conflicting_review_and_query_options(monkeypatch) -> None
         query_conflict = runner.invoke(cli_main.app, ["graph", "--focus", "orders", "--cycles"])
 
     assert review_conflict.exit_code != 0
-    assert "--commit cannot be combined" in review_conflict.output
+    assert "--commit cannot be combined" in _plain(review_conflict.output)
     assert query_conflict.exit_code != 0
-    assert "Use only one of" in query_conflict.output
+    assert "Use only one of" in _plain(query_conflict.output)
 
 
 def test_graph_focused_views(monkeypatch) -> None:
@@ -134,6 +136,10 @@ def _fake_review_result(**kwargs) -> ReviewResult:
 
 def _config() -> str:
     return "project:\n  name: test\n  default_base: main\n"
+
+
+def _plain(output: str) -> str:
+    return ANSI_ESCAPE.sub("", output)
 
 
 class _isolated:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 import typer
 from typer.testing import CliRunner
 from pathlib import Path
@@ -10,6 +12,7 @@ from sktr_cli.main import _review_scope
 from sktr_git import ReviewScope
 
 runner = CliRunner()
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 
 def test_default_cli_scope_is_working_tree() -> None:
@@ -52,7 +55,7 @@ def test_cli_rejects_commit_with_branch() -> None:
         result = runner.invoke(app, ["review", "--commit", "HEAD~1", "--branch"])
 
     assert result.exit_code != 0
-    assert "--commit cannot be combined" in result.output
+    assert "--commit cannot be combined" in _plain(result.output)
 
 
 def test_cli_rejects_commit_with_base() -> None:
@@ -61,7 +64,7 @@ def test_cli_rejects_commit_with_base() -> None:
         result = runner.invoke(app, ["review", "--commit", "HEAD~1", "--base", "main"])
 
     assert result.exit_code != 0
-    assert "--commit cannot be combined" in result.output
+    assert "--commit cannot be combined" in _plain(result.output)
 
 
 def test_review_command_requires_config() -> None:
@@ -89,6 +92,10 @@ def test_progress_uses_spinner_only_for_interactive_terminal() -> None:
 
 def _config() -> str:
     return "project:\n  name: test\n  default_base: main\n"
+
+
+def _plain(output: str) -> str:
+    return ANSI_ESCAPE.sub("", output)
 
 
 class _isolated:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import tomllib
@@ -27,6 +28,7 @@ from sktr_core.version import SKTR_VERSION
 
 runner = CliRunner()
 ROOT = Path(__file__).parents[1]
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 
 @pytest.mark.parametrize(
@@ -44,7 +46,7 @@ def test_cli_help_is_available_and_descriptive(arguments: list[str], expected: s
     result = runner.invoke(cli_main.app, arguments)
 
     assert result.exit_code == 0
-    assert expected in result.output
+    assert expected in ANSI_ESCAPE.sub("", result.output)
 
 
 def test_cli_reports_version() -> None:
@@ -390,10 +392,14 @@ def test_builtin_plugin_versions_match_package_version() -> None:
 
 
 def _git(cwd: Path, *arguments: str) -> None:
-    subprocess.run(
+    completed = subprocess.run(
         ["git", *arguments],
         cwd=cwd,
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
     )
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip() or "no Git output"
+        command = " ".join(("git", *arguments))
+        raise AssertionError(f"{command} failed in {cwd}: {detail}")

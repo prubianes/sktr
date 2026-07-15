@@ -1,0 +1,25 @@
+project:
+  name: sktr-java-basic
+  default_base: main
+review:
+  default_scope: working_tree
+plugins:
+  analyzers:
+    - sktr-java
+  rules:
+    - sktr-rules-default
+  outputs:
+    - terminal
+    - markdown
+    - json
+    - mermaid
+rules:
+  enabled:
+    - new_dependency
+    - forbidden_dependency
+  forbidden_dependencies:
+    - source: controllers
+      target: repositories
+      reason: Controllers should access repositories through services.
+ai:
+  enabled: false
