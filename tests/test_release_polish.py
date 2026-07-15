@@ -332,9 +332,11 @@ def test_release_files_package_schema_and_use_trusted_publishing() -> None:
     assert "include CONTRIBUTING.md" in manifest
     assert "include SECURITY.md" in manifest
     assert 'python-version: ["3.13", "3.14"]' in ci
+    assert "actions/checkout@v6" in ci
     assert "docs/schema/sktr-review-0.1.schema.json" in ci
     assert "twine check dist/*" in ci
     assert "id-token: write" in release
+    assert "actions/checkout@v6" in release
     assert "pypa/gh-action-pypi-publish@release/v1" in release
     assert "environment: pypi" in release
     assert "needs: build" in release
