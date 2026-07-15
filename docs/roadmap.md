@@ -1,16 +1,37 @@
 # SKTR Roadmap Through v0.20
 
-SKTR's path to v1 adds two bundled language analyzers, freezes the automation
-contract, and turns dependency graphing into a useful architecture view. v0.16
-delivers JavaScript and TypeScript analysis, v0.17 adds Java, v0.18 adds CI
-gates, exclusions, diagnostics, and artifact schema stability, v0.19 adds
-repository-context graphs, and v0.20 makes API exposure, logical modules, React
+SKTR's path to v1 delivered two bundled language analyzers, froze the automation
+contract, and turned dependency graphing into a useful architecture view. v0.16
+delivered JavaScript and TypeScript analysis, v0.17 added Java, v0.18 added CI
+gates, exclusions, diagnostics, and artifact schema stability, v0.19 added
+repository-context graphs, and v0.20 made API exposure, logical modules, React
 metrics, Java relationships, and testing signals evidence-based. All detection
 remains deterministic and all analyzers remain isolated entry-point plugins
 behind the language-agnostic Knowledge Model.
 
 This opening summary is intentionally self-contained so it can be copied into a
 planning conversation without the rest of the repository context.
+
+## v1.0.0rc1: Public Release Candidate
+
+Goal: validate the complete v1 contract with real projects before declaring the
+final stable release.
+
+- [x] Promote package and built-in plugin metadata to `1.0.0rc1`.
+- [x] Fail clearly when Git cannot resolve or prepare the selected review scope.
+- [x] Use standards-compliant safe YAML loading and preserve existing configs.
+- [x] Emit one RFC 3339 UTC timestamp across every output from a review run.
+- [x] Build and validate wheel and source distributions on Python 3.13 and 3.14.
+- [x] Add least-privilege trusted publishing through a protected GitHub
+  environment.
+- [x] Publish public CLI, troubleshooting, limitations, contribution, security,
+  and release-history documentation.
+- [ ] Complete external CI, trusted-publisher, tag, and PyPI verification from
+  the [release checklist](release-checklist.md).
+
+Acceptance: the exact `v1.0.0rc1` tag passes CI, publishes through PyPI trusted
+publishing, installs into a clean environment, and produces a schema-valid
+artifact from a real repository.
 
 ## v0.16: JavaScript and TypeScript
 

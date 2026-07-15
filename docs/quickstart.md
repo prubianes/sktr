@@ -5,8 +5,21 @@
 SKTR requires Python 3.13 or newer and Git.
 
 ```bash
-pip install sktr
+python -m pip install --pre sktr==1.0.0rc1
 ```
+
+This installs the v1.0.0 release candidate. After the final v1 release, the
+standard installation command will be `python -m pip install sktr`.
+
+Confirm the installation and discover the available commands:
+
+```bash
+sktr --version
+sktr --help
+```
+
+Every command also has focused help, for example `sktr review --help` and
+`sktr graph --help`.
 
 For local development from this repository, use `uv sync` and prefix commands
 with `uv run`.

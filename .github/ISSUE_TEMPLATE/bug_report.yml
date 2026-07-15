@@ -1,0 +1,45 @@
+name: Bug report
+description: Report a reproducible problem in SKTR.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve SKTR. Do not include credentials, private source code, or vulnerability details.
+  - type: input
+    id: version
+    attributes:
+      label: SKTR version
+      description: Output from `sktr --version`.
+      placeholder: sktr 1.0.0rc1
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, Python version, installation method, and Git version.
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Problem
+      description: What happened, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide sanitized commands, configuration, and the smallest example that reproduces the behavior.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Sanitized output
+      description: Remove API keys, private source, usernames, and sensitive paths.
+      render: text
+

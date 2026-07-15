@@ -1,6 +1,7 @@
 # SKTR Documentation
 
 - [Quickstart](quickstart.md)
+- [CLI reference](cli.md)
 - [Configuration](configuration.md)
 - [Plugins](plugins.md)
 - [Analyzer semantics](analyzers.md)
@@ -9,6 +10,11 @@
 - [Architecture graphs](graphs.md)
 - [Development](development.md)
 - [CI integration](ci.md)
+- [Troubleshooting](troubleshooting.md)
+- [Known limitations](limitations.md)
 - [Roadmap through v0.20](roadmap.md)
 - [Artifact schema](schema/README.md)
-- [v1.0 release checklist](release-checklist.md)
+- [v1.0.0rc1 release checklist](release-checklist.md)
+- [Changelog](../CHANGELOG.md)
+- [Contributing](../CONTRIBUTING.md)
+- [Security policy](../SECURITY.md)

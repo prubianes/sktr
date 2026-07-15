@@ -28,6 +28,8 @@ jobs:
         run: uv run --python ${{ matrix.python-version }} pytest -q
       - name: Build distributions
         run: uv build
+      - name: Validate package metadata and README
+        run: uv run twine check dist/*
       - name: Verify source distribution contents
         run: |
           tar -tzf dist/sktr-*.tar.gz | grep 'docs/schema/sktr-review-0.1.schema.json'
@@ -44,4 +46,3 @@ jobs:
       - name: Validate canonical artifact
         run: |
           uv run python -c 'import json; from pathlib import Path; from jsonschema import validate; validate(json.loads(Path("/tmp/sktr-review.json").read_text()), json.loads(Path("docs/schema/sktr-review-0.1.schema.json").read_text()))'
-

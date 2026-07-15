@@ -8,6 +8,10 @@
 
 Understand your software before you change it.
 
+> **Release candidate:** `1.0.0rc1` is the first public preview of the v1
+> interface and artifact contract. Please report reproducible feedback through
+> the [issue tracker](https://github.com/prubianes/sktr/issues).
+
 SKTR is a language-agnostic software intelligence CLI. It turns Git changes into
 a structured knowledge model, enriches that model with deterministic engineering
 metrics, applies architecture rules, and produces review artifacts for people and
@@ -53,10 +57,12 @@ result as a versioned JSON artifact rather than only printing prose.
 
 ## Quickstart
 
-SKTR requires Python 3.13 or newer and a Git repository.
+SKTR requires Python 3.13 or newer and a Git repository. Install RC1 explicitly:
 
 ```bash
-pip install sktr
+python -m pip install --pre sktr==1.0.0rc1
+sktr --version
+sktr --help
 cd your-project
 sktr init --yes
 sktr review
@@ -76,6 +82,7 @@ sktr graph --scope repository --focus orders
 See the [quickstart](docs/quickstart.md) for review scopes and a complete first run.
 See [architecture graphs](docs/graphs.md) for repository and focused views.
 See [analyzer semantics](docs/analyzers.md) for visibility, modules, and metrics.
+See the [CLI reference](docs/cli.md) for every command and exit status.
 
 ## Example output
 
@@ -210,7 +217,7 @@ through v0.20. Post-v1 work remains tracked in the canonical roadmap.
 
 The v0.16-v0.18 roadmap delivered bundled JavaScript/TypeScript and Java
 analyzers, followed by CI severity gates, exclusions, parse diagnostics, and a
-frozen artifact schema. v0.19 added repository-context graphs, and v0.20 adds
+frozen artifact schema. v0.19 added repository-context graphs, and v0.20 added
 evidence-based API exposure, logical application modules, alias resolution, and
 more precise React and Java signals.
 See the [canonical roadmap](docs/roadmap.md) for milestone deliverables and
@@ -226,9 +233,15 @@ uv run pytest
 uv run sktr review
 ```
 
-Read [development.md](docs/development.md) before adding an analyzer, rule,
-output, or provider. Release work is tracked in the
-[v1.0 checklist](docs/release-checklist.md).
+Read [CONTRIBUTING.md](CONTRIBUTING.md) and
+[development.md](docs/development.md) before adding an analyzer, rule, output,
+or provider. Release work is tracked in the
+[v1.0.0rc1 checklist](docs/release-checklist.md).
+
+For help, see [troubleshooting](docs/troubleshooting.md) and the
+[known limitations](docs/limitations.md). Report sensitive vulnerabilities
+privately according to [SECURITY.md](SECURITY.md). Release history is recorded in
+the [changelog](CHANGELOG.md).
 
 ## License
 

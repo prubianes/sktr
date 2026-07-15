@@ -51,7 +51,7 @@ def test_cli_reports_version() -> None:
     result = runner.invoke(cli_main.app, ["--version"])
 
     assert result.exit_code == 0
-    assert result.output.strip() == "sktr 1.0.0"
+    assert result.output.strip() == "sktr 1.0.0rc1"
 
 
 def test_review_accepts_explicit_config_path(tmp_path: Path, monkeypatch) -> None:
@@ -261,7 +261,7 @@ def test_public_docs_include_release_commands_and_current_ai_field() -> None:
     outputs = (ROOT / "docs" / "outputs.md").read_text(encoding="utf-8")
 
     for command in [
-        "pip install sktr",
+        "python -m pip install --pre sktr==1.0.0rc1",
         "sktr init --yes",
         "sktr review --ai",
         "sktr review --format markdown --output REVIEW.md",
@@ -297,7 +297,7 @@ def test_packaging_metadata_matches_release_contract() -> None:
         project = tomllib.load(file)["project"]
 
     assert project["name"] == "sktr"
-    assert project["version"] == "1.0.0"
+    assert project["version"] == "1.0.0rc1"
     assert project["requires-python"] == ">=3.13"
     assert project["readme"] == "README.md"
     assert project["license"] == "MIT"
@@ -312,8 +312,11 @@ def test_packaging_metadata_matches_release_contract() -> None:
     } <= set(
         project["dependencies"]
     )
-    assert "Development Status :: 5 - Production/Stable" in project["classifiers"]
+    assert "Development Status :: 4 - Beta" in project["classifiers"]
+    assert "Programming Language :: Python :: 3.14" in project["classifiers"]
     assert project["urls"]["Repository"] == "https://github.com/prubianes/sktr"
+    assert project["urls"]["Documentation"].endswith("/docs")
+    assert project["urls"]["Changelog"].endswith("/CHANGELOG.md")
 
 
 def test_release_files_package_schema_and_use_trusted_publishing() -> None:
@@ -323,11 +326,43 @@ def test_release_files_package_schema_and_use_trusted_publishing() -> None:
 
     assert "recursive-include docs/schema *.json" in manifest
     assert "include assets/sktr-logo.png" in manifest
+    assert "include CHANGELOG.md" in manifest
+    assert "include CONTRIBUTING.md" in manifest
+    assert "include SECURITY.md" in manifest
     assert 'python-version: ["3.13", "3.14"]' in ci
     assert "docs/schema/sktr-review-0.1.schema.json" in ci
+    assert "twine check dist/*" in ci
     assert "id-token: write" in release
     assert "pypa/gh-action-pypi-publish@release/v1" in release
     assert "environment: pypi" in release
+    assert "needs: build" in release
+    assert "actions/upload-artifact@v4" in release
+    assert "actions/download-artifact@v4" in release
+    assert "twine check dist/*" in release
+
+
+def test_public_documentation_covers_rc_support_and_operations() -> None:
+    documentation = {
+        path.name: path.read_text(encoding="utf-8")
+        for path in [
+            ROOT / "CHANGELOG.md",
+            ROOT / "CONTRIBUTING.md",
+            ROOT / "SECURITY.md",
+            ROOT / "docs" / "cli.md",
+            ROOT / "docs" / "troubleshooting.md",
+            ROOT / "docs" / "limitations.md",
+        ]
+    }
+
+    assert "1.0.0rc1" in documentation["CHANGELOG.md"]
+    assert "uv run pytest" in documentation["CONTRIBUTING.md"]
+    assert "Report a vulnerability" in documentation["SECURITY.md"]
+    assert "sktr report" in documentation["cli.md"]
+    assert "A new file is missing" in documentation["troubleshooting.md"]
+    assert "Untracked" in documentation["limitations.md"]
+    assert (ROOT / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml").is_file()
+    assert (ROOT / ".github" / "ISSUE_TEMPLATE" / "feature_request.yml").is_file()
+    assert (ROOT / ".github" / "pull_request_template.md").is_file()
 
 
 def test_plugin_load_errors_are_reported_by_doctor_validation() -> None:
@@ -350,7 +385,7 @@ def test_plugin_load_errors_are_reported_by_doctor_validation() -> None:
 def test_builtin_plugin_versions_match_package_version() -> None:
     registry = PluginRegistry.discover()
 
-    assert SKTR_VERSION == "1.0.0"
+    assert SKTR_VERSION == "1.0.0rc1"
     assert {record.metadata.version for record in registry.records} == {SKTR_VERSION}
 
 

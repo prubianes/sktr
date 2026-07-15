@@ -1,4 +1,4 @@
-# SKTR v1.0 Release Checklist
+# SKTR v1.0.0rc1 Release Checklist
 
 Implementation milestones are tracked in the [v0.16-v0.20 roadmap](roadmap.md).
 
@@ -19,7 +19,7 @@ Implementation milestones are tracked in the [v0.16-v0.20 roadmap](roadmap.md).
 
 ## Quality
 
-- [x] Tests pass (`190 passed` locally; CI verifies Python 3.13 and 3.14)
+- [x] Tests pass (`191 passed` locally; CI verifies Python 3.13 and 3.14)
 - [x] Type checks pass, if configured (no type checker configured)
 - [x] Lint passes, if configured (no linter configured)
 - [x] No API keys in examples
@@ -36,12 +36,15 @@ Implementation milestones are tracked in the [v0.16-v0.20 roadmap](roadmap.md).
 - [x] Plugin docs complete
 - [x] AI docs complete
 - [x] Output docs complete
+- [x] CLI reference complete
+- [x] Troubleshooting and known limitations documented
+- [x] Changelog, contribution guide, and security policy added
 
 ## Packaging
 
 - [x] Package metadata reviewed
 - [x] CLI entry point works
-- [x] Version updated (`1.0.0`)
+- [x] Version updated (`1.0.0rc1`)
 - [x] License included
 - [x] Wheel and source distribution build successfully
 - [x] Built wheel installs in a clean Python 3.13+ environment
@@ -53,7 +56,8 @@ Implementation milestones are tracked in the [v0.16-v0.20 roadmap](roadmap.md).
 
 - [ ] Release-candidate commit passes GitHub Actions on Python 3.13 and 3.14
 - [ ] Protected `pypi` GitHub environment and PyPI trusted publisher verified
-- [ ] `v1.0.0` tag created from the approved release-candidate commit
+- [ ] GitHub private vulnerability reporting enabled for the repository
+- [ ] `v1.0.0rc1` tag created from the approved release-candidate commit
 - [ ] PyPI package, description, links, and console entry point verified
 
 ## Publish process
@@ -64,6 +68,10 @@ Implementation milestones are tracked in the [v0.16-v0.20 roadmap](roadmap.md).
 4. Tag the approved commit with the release version.
 5. Push the matching version tag to publish through the trusted PyPI workflow.
 6. Verify the PyPI description, installation command, and console entry point.
+
+After RC feedback is resolved, promote by changing the package version to
+`1.0.0`, changing the development-status classifier to Production/Stable,
+repeating this checklist, and tagging the approved commit as `v1.0.0`.
 
 Do not publish from an uncommitted working tree or embed a PyPI token in project
 files, shell history, or CI logs.
