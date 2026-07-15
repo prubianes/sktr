@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/prubianes/sktr/blob/main/docs/schema/sktr-review-0.1.schema.json",
+  "title": "SKTR Review Artifact 0.1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "metadata",
+    "repository",
+    "summary",
+    "status",
+    "changed_files",
+    "excluded_files",
+    "knowledge_summary",
+    "knowledge_model_summary",
+    "issues",
+    "diagnostics",
+    "ai_review",
+    "rules",
+    "rule_results",
+    "score",
+    "risk",
+    "review_result"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "metadata": {"type": "object"},
+    "repository": {
+      "type": "object",
+      "required": ["name", "root_path"],
+      "properties": {
+        "name": {"type": ["string", "null"]},
+        "root_path": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "summary": {
+      "type": "object",
+      "required": ["score", "risk", "changed_files", "issues"],
+      "properties": {
+        "score": {"type": "integer", "minimum": 0, "maximum": 100},
+        "risk": {"enum": ["low", "medium", "high", "critical"]},
+        "changed_files": {"type": "integer", "minimum": 0},
+        "issues": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "status": {"type": "string"},
+    "changed_files": {"type": "array", "items": {"$ref": "#/$defs/file_change"}},
+    "excluded_files": {"type": "array", "items": {"type": "string"}},
+    "knowledge_summary": {"type": "object", "additionalProperties": {"type": "integer"}},
+    "knowledge_model_summary": {
+      "type": "object",
+      "required": ["modules", "source_files", "symbols", "dependencies"],
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    },
+    "issues": {"type": "array", "items": {"type": "object"}},
+    "diagnostics": {"type": "array", "items": {"$ref": "#/$defs/diagnostic"}},
+    "ai_review": {"type": ["object", "null"]},
+    "rules": {"type": "array", "items": {"type": "object"}},
+    "rule_results": {"type": "array", "items": {"type": "object"}},
+    "score": {"type": "integer", "minimum": 0, "maximum": 100},
+    "risk": {"enum": ["low", "medium", "high", "critical"]},
+    "review_result": {"type": "object"}
+  },
+  "$defs": {
+    "file_change": {
+      "type": "object",
+      "required": ["path", "status", "added_lines", "removed_lines", "old_path"],
+      "properties": {
+        "path": {"type": "string"},
+        "status": {"type": "string"},
+        "added_lines": {"type": "integer", "minimum": 0},
+        "removed_lines": {"type": "integer", "minimum": 0},
+        "old_path": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "diagnostic": {
+      "type": "object",
+      "required": ["analyzer", "file_path", "severity", "code", "message", "location"],
+      "properties": {
+        "analyzer": {"type": "string"},
+        "file_path": {"type": "string"},
+        "severity": {"enum": ["info", "warning", "error"]},
+        "code": {"type": "string"},
+        "message": {"type": "string"},
+        "location": {"type": ["object", "null"]}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
