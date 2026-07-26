@@ -159,7 +159,7 @@ architecture break.
 
 ## Deferred Until After V1
 
-- Additional AI providers
+- Additional AI providers beyond bundled OpenAI and Anthropic support
 - GitHub integration
 - Impact and explain commands
 - Dashboards and editor extensions

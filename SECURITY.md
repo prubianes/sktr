@@ -29,6 +29,8 @@ For non-sensitive defects and feature requests, use the public
 ## Credential handling
 
 SKTR reads optional OpenAI credentials from `SKTR_OPENAI_API_KEY` or
-`OPENAI_API_KEY`. It does not store those values in `sktr.yml`, review artifacts,
-or diagnostic output. Reports should still be reviewed before sharing because
-they contain repository paths, symbols, dependencies, and change metadata.
+`OPENAI_API_KEY`, and optional Anthropic credentials from
+`SKTR_ANTHROPIC_API_KEY` or `ANTHROPIC_API_KEY`. It does not store those values
+in `sktr.yml`, review artifacts, or diagnostic output. Reports should still be
+reviewed before sharing because they contain repository paths, symbols,
+dependencies, and change metadata.

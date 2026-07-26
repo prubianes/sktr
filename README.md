@@ -53,7 +53,7 @@ result as a versioned JSON artifact rather than only printing prose.
 - Terminal, Markdown, JSON, and Mermaid output
 - Plugin discovery and diagnostics
 - CI severity gates, path exclusions, and parse diagnostics
-- Optional OpenAI-powered explanations and recommendations
+- Optional OpenAI- or Anthropic Claude-powered explanations and recommendations
 
 ## Quickstart
 
@@ -190,7 +190,27 @@ sktr review --ai
 ```
 
 OpenAI key resolution is `SKTR_OPENAI_API_KEY` first, then `OPENAI_API_KEY`.
-SKTR never stores or prints the key. See [AI setup](docs/ai.md).
+Claude is also supported:
+
+```bash
+export ANTHROPIC_API_KEY="your-api-key"
+sktr ai doctor
+sktr review --ai
+```
+
+Configure Claude in `sktr.yml`:
+
+```yaml
+ai:
+  enabled: true
+  provider: anthropic
+  model: claude-sonnet-5
+```
+
+Anthropic key resolution is `SKTR_ANTHROPIC_API_KEY` first, then
+`ANTHROPIC_API_KEY`. The SKTR-specific variable is useful when you want a
+separate key for SKTR. SKTR never stores or prints provider keys. See
+[AI setup](docs/ai.md).
 
 ## Plugins
 

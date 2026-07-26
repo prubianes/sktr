@@ -76,6 +76,15 @@ ai:
 
 Do not store API keys in `sktr.yml`.
 
+To use Anthropic Claude instead:
+
+```yaml
+ai:
+  enabled: true
+  provider: anthropic
+  model: claude-sonnet-5
+```
+
 ## Sections
 
 ### `project`
@@ -121,9 +130,10 @@ surfaces rather than Medium source-maintainability findings.
 
 - `enabled`: whether AI features run by default.
 - `provider`: installed provider name; required when enabled.
-- `model`: provider model override. Interactive init offers `gpt-5.6-terra`
-  (balanced), `gpt-5.6-luna` (efficient), `gpt-5.6-sol` (quality-first), and a
-  custom model ID. Existing model IDs remain valid.
+- `model`: provider model override. OpenAI profiles are `gpt-5.6-terra`,
+  `gpt-5.6-luna`, and `gpt-5.6-sol`. Anthropic profiles are
+  `claude-sonnet-5`, `claude-haiku-4-5`, and `claude-opus-5`. Both providers
+  allow a custom model ID.
 
 When `enabled` is `false`, omit `provider` and `model`. Use `--ai`, `--no-ai`, and
 `--model` for one-run overrides.

@@ -56,8 +56,10 @@ AI is optional. Check configuration and credential discovery:
 sktr ai doctor
 ```
 
-Set `SKTR_OPENAI_API_KEY` or use `OPENAI_API_KEY` as a fallback. A provider
-warning does not cancel deterministic analysis or affect the score.
+For OpenAI, set `SKTR_OPENAI_API_KEY` or use `OPENAI_API_KEY` as a fallback.
+For Anthropic Claude, set `SKTR_ANTHROPIC_API_KEY` or use
+`ANTHROPIC_API_KEY`. A provider warning does not cancel deterministic analysis
+or affect the score.
 
 ## No dependency graph can be generated
 
@@ -94,4 +96,3 @@ python -m pip install --pre sktr==1.0.0rc1
 
 Open a public issue with the operating system, Python version, command, and
 sanitized error output if the problem remains.
-

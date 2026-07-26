@@ -7,6 +7,7 @@ Implementation milestones are tracked in the [v0.16-v0.20 roadmap](roadmap.md).
 - [x] `sktr init --yes` works
 - [x] `sktr review` works without AI
 - [x] `sktr review --ai` works with OpenAI configured (live credential verified by project owner)
+- [x] Anthropic Claude provider, model selection, and credential diagnostics work
 - [x] `sktr graph` works
 - [x] Repository and change graph scopes pass the v0.19 acceptance checks
 - [x] Focused, cycle, dependency, and dependent graph views work

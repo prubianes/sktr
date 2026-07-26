@@ -201,6 +201,46 @@ def test_interactive_init_can_select_luna_profile() -> None:
     assert answers.ai_model == "gpt-5.6-luna"
 
 
+def test_anthropic_model_profiles_include_fast_balanced_quality_and_custom() -> None:
+    from sktr_ai import ANTHROPIC_MODEL_PROFILES, DEFAULT_ANTHROPIC_MODEL
+
+    assert DEFAULT_ANTHROPIC_MODEL == "claude-sonnet-5"
+    assert [model for _, model in ANTHROPIC_MODEL_PROFILES] == [
+        "claude-sonnet-5",
+        "claude-haiku-4-5",
+        "claude-opus-5",
+    ]
+
+
+def test_interactive_init_can_select_anthropic_provider() -> None:
+    class Prompter:
+        def confirm(self, message: str, default: bool = True) -> bool:
+            return True
+
+        def select(self, message, choices, default):
+            if message == "AI provider":
+                return "anthropic"
+            if message == "Anthropic model":
+                return "claude-haiku-4-5"
+            return default
+
+        def checkbox(self, message, choices, defaults):
+            return defaults
+
+        def text(self, message: str, default: str) -> str:
+            return default
+
+    answers = prompt_for_answers(
+        ProjectDetection(name="app", default_base="main", languages=["Python"], repository="Git"),
+        PluginRegistry.discover(),
+        Prompter(),
+        preset_override=InitPreset.RECOMMENDED,
+    )
+
+    assert answers.ai_provider == "anthropic"
+    assert answers.ai_model == "claude-haiku-4-5"
+
+
 def test_default_config_remains_valid_when_no_plugins_are_discovered() -> None:
     registry = PluginRegistry([])
     answers = default_answers(

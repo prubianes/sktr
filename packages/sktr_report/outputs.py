@@ -7,6 +7,7 @@ from pathlib import Path
 
 from rich.console import Console
 from rich.markup import escape
+from rich.text import Text
 
 from sktr_core.model import AnalysisDiagnostic, Issue, IssueSeverity, ReviewResult
 from sktr_core.plugins import Output
@@ -20,7 +21,7 @@ class TerminalOutput:
     def write(self, result: ReviewResult, destination: str | None = None) -> None:
         content = self.render(result)
         if destination is not None:
-            _write_text(destination, content)
+            _write_text(destination, Text.from_markup(content).plain)
             return
 
         Console(file=sys.stdout).print(content)

@@ -4,6 +4,18 @@ All notable changes to SKTR are documented here. Versions follow
 [Semantic Versioning](https://semver.org/) and Python package versions follow
 [PEP 440](https://peps.python.org/pep-0440/).
 
+## Unreleased
+
+### Added
+
+- Anthropic Claude AI review provider with Sonnet, Haiku, Opus, and custom
+  model selection.
+
+### Fixed
+
+- Terminal output written with `--output` is now plain text instead of containing
+  Rich markup tags.
+
 ## 1.0.0rc1 - 2026-07-14
 
 First public release candidate.
@@ -41,4 +53,3 @@ First public release candidate.
 - AI is optional and explanatory; it does not add findings or alter risk scores.
 - This release candidate does not include GitHub review integration, impact or
   explain commands, dashboards, or automatic code changes.
-

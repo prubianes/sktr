@@ -54,6 +54,7 @@ json = "sktr_report:JsonOutputPlugin"
 mermaid = "sktr_graph:MermaidOutputPlugin"
 
 [project.entry-points."sktr.ai_providers"]
+anthropic = "sktr_ai:AnthropicProviderPlugin"
 openai = "sktr_ai:OpenAIProviderPlugin"
 
 [dependency-groups]

@@ -107,11 +107,22 @@ working-tree, branch, or commit change. See [architecture graphs](graphs.md).
 
 ## Enable AI features
 
+OpenAI:
+
 ```bash
 export SKTR_OPENAI_API_KEY="your-api-key"
 sktr ai doctor
 sktr review --ai
 sktr review --ai --model gpt-5.6-terra
+```
+
+Anthropic Claude:
+
+```bash
+export SKTR_ANTHROPIC_API_KEY="your-api-key"
+# Set ai.provider to anthropic and ai.model to claude-sonnet-5 in sktr.yml.
+sktr ai doctor
+sktr review --ai
 ```
 
 AI is optional. Without it, analyzers, enrichment, rules, scoring, and all output

@@ -151,6 +151,25 @@ def test_markdown_output_writes_to_file(tmp_path: Path) -> None:
     assert output_path.read_text(encoding="utf-8").startswith("# SKTR Review\n")
 
 
+def test_terminal_output_writes_plain_text_to_file(tmp_path: Path) -> None:
+    output_path = tmp_path / "reports" / "REVIEW.txt"
+    result = ReviewResult(
+        status="review complete",
+        context=ReviewContext(
+            file_changes=[FileChange(path="app/[rooms]/roomPageClient.tsx", status="modified")]
+        ),
+    )
+
+    TerminalOutput().write(result, str(output_path))
+
+    content = output_path.read_text(encoding="utf-8")
+    assert content.startswith("SKTR Review\n")
+    assert "Summary\n" in content
+    assert "app/[rooms]/roomPageClient.tsx" in content
+    assert "[bold]" not in content
+    assert "[/bold]" not in content
+
+
 def test_markdown_output_snapshot() -> None:
     assert MarkdownOutput().render(_rich_review_result()) == "\n".join(
         [
