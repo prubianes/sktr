@@ -170,6 +170,38 @@ def test_terminal_output_writes_plain_text_to_file(tmp_path: Path) -> None:
     assert "[/bold]" not in content
 
 
+def test_empty_working_tree_has_explicit_human_output_state() -> None:
+    result = ReviewResult(
+        status="review complete",
+        context=ReviewContext(metadata={"review_scope": "working_tree"}),
+    )
+
+    terminal = TerminalOutput().render(result)
+    markdown = MarkdownOutput().render(result)
+
+    for output in (terminal, markdown):
+        assert "No tracked changes found." in output
+        assert "Untracked files are not included." in output
+        assert "git add" in output
+    assert "[bold]Changed Files[/bold]" not in terminal
+    assert "## Changed Files" not in markdown
+
+
+def test_empty_branch_review_does_not_show_working_tree_staging_advice() -> None:
+    result = ReviewResult(
+        status="review complete",
+        context=ReviewContext(metadata={"review_scope": "branch"}),
+    )
+
+    terminal = TerminalOutput().render(result)
+    markdown = MarkdownOutput().render(result)
+
+    for output in (terminal, markdown):
+        assert "No changes found for the selected branch comparison." in output
+        assert "Untracked files" not in output
+        assert "git add" not in output
+
+
 def test_markdown_output_snapshot() -> None:
     assert MarkdownOutput().render(_rich_review_result()) == "\n".join(
         [

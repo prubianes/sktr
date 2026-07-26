@@ -15,6 +15,8 @@ All notable changes to SKTR are documented here. Versions follow
 
 - Terminal output written with `--output` is now plain text instead of containing
   Rich markup tags.
+- Empty reviews now clearly report when no tracked changes are present and
+  explain how to include untracked working-tree files.
 
 ## 1.0.0rc1 - 2026-07-14
 
