@@ -59,10 +59,32 @@ def test_missing_config_uses_safe_defaults(tmp_path: Path) -> None:
 
     assert config.project.name is None
     assert config.git.default_base_branch == "main"
+    assert config.output.language == "en"
     assert config.rules.enabled == DEFAULT_ENABLED_RULES
     assert config.rules.large_file.max_changed_lines == 300
     assert config.rules.large_function.max_lines == 80
     assert config.rules.forbidden_dependencies == []
+
+
+def test_output_language_accepts_and_normalizes_bcp47_tags(tmp_path: Path) -> None:
+    config_path = tmp_path / "sktr.yml"
+    config_path.write_text("output:\n  language: pt_BR\n", encoding="utf-8")
+
+    config = load_config(config_path)
+
+    assert config.output.language == "pt-BR"
+
+
+def test_output_language_rejects_invalid_tags(tmp_path: Path) -> None:
+    config_path = tmp_path / "sktr.yml"
+    config_path.write_text("output:\n  language: not a language\n", encoding="utf-8")
+
+    try:
+        load_config(config_path)
+    except ValueError as error:
+        assert "BCP 47" in str(error)
+    else:
+        raise AssertionError("Expected an invalid language tag to fail")
 
 
 def test_yaml_supports_inline_lists_comments_and_hashes_in_quotes(tmp_path: Path) -> None:

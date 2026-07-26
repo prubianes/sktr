@@ -3,6 +3,8 @@ project:
   default_base: main
 review:
   default_scope: working_tree
+output:
+  language: en
 plugins:
   analyzers:
     - sktr-python

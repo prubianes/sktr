@@ -9,6 +9,8 @@ review:
     - dist/
     - build/
     - target/
+output:
+  language: en
 plugins:
   analyzers:
     - sktr-python

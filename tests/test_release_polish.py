@@ -262,6 +262,10 @@ def test_public_docs_include_release_commands_and_current_ai_field() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     outputs = (ROOT / "docs" / "outputs.md").read_text(encoding="utf-8")
 
+    assert (
+        'src="https://raw.githubusercontent.com/prubianes/sktr/'
+        'v1.0.0/assets/sktr-logo.png"'
+    ) in readme
     for command in [
         "python -m pip install sktr==1.0.0",
         "sktr init --yes",

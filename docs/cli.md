@@ -23,6 +23,7 @@ sktr init --yes
 sktr init --preset minimal
 sktr init --preset custom
 sktr init --ai
+sktr init --language es
 sktr init --dry-run
 sktr init --force
 ```
@@ -30,6 +31,8 @@ sktr init --force
 `--yes` accepts non-interactive defaults. `--force` is required to replace an
 existing configuration. `--dry-run` prints the generated configuration without
 writing it.
+Interactive setup asks for the review language. `--language` accepts a BCP 47
+tag and also works with `--yes`.
 
 ## `sktr review`
 
@@ -44,6 +47,8 @@ sktr review --commit HEAD~1
 sktr review --format markdown --output REVIEW.md
 sktr review --format json --output sktr-review.json
 sktr review --ai --model gpt-5.6-terra
+sktr review --language es
+sktr review --ai --language pt-BR
 sktr review --fail-on high
 ```
 
@@ -55,6 +60,10 @@ combined with branch or base scope.
 Formats are `terminal`, `markdown`, and `json`. Output is written before a
 `--fail-on` threshold returns exit status `1`.
 
+`--language` overrides `output.language`. English and Spanish localize the
+complete deterministic human report. Other valid tags keep deterministic text
+in English and request AI prose in the selected language.
+
 ## `sktr report`
 
 Render a saved JSON artifact without rerunning Git, analyzers, rules, or AI.
@@ -62,7 +71,11 @@ Render a saved JSON artifact without rerunning Git, analyzers, rules, or AI.
 ```bash
 sktr report sktr-review.json
 sktr report sktr-review.json --format markdown --output REVIEW.md
+sktr report sktr-review.json --language es
 ```
+
+Changing the report language does not rerun or translate AI prose already stored
+in the artifact.
 
 ## `sktr graph`
 

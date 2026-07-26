@@ -8,6 +8,13 @@ changed production files or modules. Breadth is score metadata, not an issue, an
 can make a large review Medium risk even when no deterministic finding exists.
 Completed pipeline runs use the status `review complete`.
 
+English (`en`) and Spanish (`es`) have complete catalogs for deterministic
+terminal and Markdown report text. Set `output.language` or pass `--language`.
+Other valid BCP 47 tags fall back to English for deterministic text and remain
+available to AI providers. Canonical JSON field names and values used for
+automation are never translated; the requested language is recorded in review
+metadata.
+
 ## Terminal
 
 ```bash
@@ -47,6 +54,7 @@ Render a saved artifact without rerunning analysis:
 ```bash
 sktr report sktr-review.json --format terminal
 sktr report sktr-review.json --format markdown --output REVIEW.md
+sktr report sktr-review.json --format markdown --language es
 ```
 
 ## Mermaid graphs

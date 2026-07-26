@@ -202,6 +202,40 @@ def test_empty_branch_review_does_not_show_working_tree_staging_advice() -> None
         assert "git add" not in output
 
 
+def test_spanish_localizes_deterministic_terminal_and_markdown_output() -> None:
+    result = _rich_review_result()
+    result.metadata["output_language"] = "es"
+
+    terminal = TerminalOutput().render(result)
+    markdown = MarkdownOutput().render(result)
+
+    for output in (terminal, markdown):
+        assert "Revisión de SKTR" in output
+        assert "Resumen" in output
+        assert "Riesgo: Medio" not in output
+        assert "Dependencia prohibida" in output
+        assert "Función extensa detectada" in output
+        assert "Acciones sugeridas" in output
+        assert "Metadatos" in output
+        assert "Idioma: es" in output
+        assert "SKTR Review" not in output
+        assert "Suggested Actions" not in output
+        assert "Forbidden dependency" not in output
+    assert "Riesgo: Media" in terminal
+    assert "`create_order` tiene 114 líneas." in markdown
+
+
+def test_unsupported_catalog_language_falls_back_but_is_recorded() -> None:
+    result = _review_result()
+    result.metadata["output_language"] = "ja"
+
+    markdown = MarkdownOutput().render(result)
+
+    assert "# SKTR Review" in markdown
+    assert "Language: ja" in markdown
+    assert "deterministic text is shown in English" in markdown
+
+
 def test_markdown_output_snapshot() -> None:
     assert MarkdownOutput().render(_rich_review_result()) == "\n".join(
         [

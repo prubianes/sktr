@@ -3,9 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 import tomllib
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 import yaml
 from yaml import YAMLError
+from sktr_core.localization import DEFAULT_LANGUAGE, normalize_language_tag
 from sktr_core.model import IssueSeverity
 
 DEFAULT_ENABLED_RULES = [
@@ -56,6 +57,15 @@ class PluginsConfig(BaseModel):
     ai_providers: list[str] = Field(default_factory=list)
 
 
+class OutputConfig(BaseModel):
+    language: str = DEFAULT_LANGUAGE
+
+    @field_validator("language")
+    @classmethod
+    def validate_language(cls, value: str) -> str:
+        return normalize_language_tag(value)
+
+
 class AIConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -102,6 +112,7 @@ class SKTRConfig(BaseModel):
     project: ProjectConfig = Field(default_factory=ProjectConfig)
     git: GitConfig = Field(default_factory=GitConfig)
     review: ReviewConfig = Field(default_factory=ReviewConfig)
+    output: OutputConfig = Field(default_factory=OutputConfig)
     plugins: PluginsConfig = Field(default_factory=PluginsConfig)
     ai: AIConfig = Field(default_factory=AIConfig)
     rules: RuleConfig = Field(default_factory=RuleConfig)

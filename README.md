@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/sktr-logo.png" alt="SKTR - System Knowledge & Technical Review" width="420">
+  <img src="https://raw.githubusercontent.com/prubianes/sktr/v1.0.0/assets/sktr-logo.png" alt="SKTR - System Knowledge & Technical Review" width="420">
 </p>
 
 # SKTR
@@ -114,6 +114,22 @@ order behavior in one large function.
 AI output appears only when enabled. Deterministic findings and scoring are the
 same with or without AI.
 
+## Output languages
+
+English (`en`) and Spanish (`es`) have complete deterministic report catalogs.
+Choose a default during `sktr init`, set `output.language` in `sktr.yml`, or
+override one run:
+
+```bash
+sktr review --language es
+sktr review --ai --language pt-BR
+```
+
+Other valid BCP 47 language tags keep deterministic terminal and Markdown text
+in English while requesting AI explanations in that language. JSON keys, schema
+fields, rule IDs, severities, paths, and code identifiers always remain
+canonical and are not translated.
+
 ## Configuration
 
 `sktr init` creates `sktr.yml`. Use interactive setup to choose plugins, rules,
@@ -132,6 +148,8 @@ review:
     - dist/
     - build/
     - target/
+output:
+  language: en
 plugins:
   analyzers:
     - sktr-python

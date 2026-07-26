@@ -27,6 +27,9 @@ review:
     - build/
     - target/
 
+output:
+  language: en
+
 plugins:
   analyzers:
     - sktr-python
@@ -99,6 +102,17 @@ ai:
 - `fail_on`: optional CI threshold: `info`, `low`, `medium`, `high`, or `critical`.
 - `exclude`: Git-ignore-style paths removed before analysis and rules. Set this to
   `[]` to disable the generated defaults.
+
+### `output`
+
+- `language`: BCP 47 language tag for human-readable review output. English
+  (`en`) and Spanish (`es`) have complete deterministic catalogs. Other valid
+  tags fall back to English for deterministic text and are passed to an enabled
+  AI provider for its explanatory prose.
+
+Use `--language` to override this value for one `review` or `report` command.
+JSON keys, rule IDs, severity values, paths, and other machine-readable
+identifiers are never translated.
 
 ### `plugins`
 

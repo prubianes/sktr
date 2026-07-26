@@ -12,6 +12,7 @@ from rich.text import Text
 from sktr_core.model import AnalysisDiagnostic, Issue, IssueSeverity, ReviewResult
 from sktr_core.plugins import Output
 from sktr_report.artifact import review_result_to_json
+from sktr_report.localization import Translator
 from sktr_report.summary import review_breadth, risk_level, risk_score
 
 
@@ -27,93 +28,155 @@ class TerminalOutput:
         Console(file=sys.stdout).print(content)
 
     def render(self, result: ReviewResult) -> str:
+        translator = _translator(result)
         score = risk_score(result)
         breadth = review_breadth(result)
-        lines = self._summary_lines(result, score, breadth)
-        lines.extend(self._changed_file_lines(result))
+        lines = self._summary_lines(result, score, breadth, translator)
+        lines.extend(self._changed_file_lines(result, translator))
 
         if result.issues:
-            lines.extend(["", "[bold]Findings[/bold]"])
-            lines.extend(self._findings_lines(result.issues))
-            lines.extend(["", "[bold]Findings by Category[/bold]"])
-            lines.extend(self._category_lines(result.issues))
+            lines.extend(["", f"[bold]{translator.text('findings', 'Findings')}[/bold]"])
+            lines.extend(self._findings_lines(result.issues, translator))
+            lines.extend(
+                ["", f"[bold]{translator.text('findings_by_category', 'Findings by Category')}[/bold]"]
+            )
+            lines.extend(self._category_lines(result.issues, translator))
 
         if result.diagnostics:
-            lines.extend(["", "[bold]Analysis Diagnostics[/bold]"])
-            lines.extend(_terminal_diagnostic(diagnostic) for diagnostic in result.diagnostics)
+            lines.extend(
+                ["", f"[bold]{translator.text('analysis_diagnostics', 'Analysis Diagnostics')}[/bold]"]
+            )
+            lines.extend(
+                _terminal_diagnostic(diagnostic, translator) for diagnostic in result.diagnostics
+            )
 
         if result.ai_review is not None:
-            lines.extend(self._ai_review_lines(result))
+            lines.extend(self._ai_review_lines(result, translator))
 
-        suggestions = _suggestions(result)
+        suggestions = _suggestions(result, translator)
         if suggestions:
-            lines.extend(["", "[bold]Suggested Actions[/bold]"])
+            lines.extend(
+                ["", f"[bold]{translator.text('suggested_actions', 'Suggested Actions')}[/bold]"]
+            )
             lines.extend(f"- {escape(suggestion)}" for suggestion in suggestions)
 
         if result.messages:
-            lines.extend(["", "[bold]Notes[/bold]"])
-            lines.extend(f"- {escape(message)}" for message in result.messages)
+            lines.extend(["", f"[bold]{translator.text('notes', 'Notes')}[/bold]"])
+            lines.extend(f"- {escape(translator.message(message))}" for message in result.messages)
 
-        lines.extend(self._metadata_lines(result))
+        lines.extend(self._metadata_lines(result, translator))
 
         return "\n".join(lines)
 
-    def _summary_lines(self, result: ReviewResult, score: int, breadth: dict[str, int]) -> list[str]:
+    def _summary_lines(
+        self,
+        result: ReviewResult,
+        score: int,
+        breadth: dict[str, int],
+        translator: Translator,
+    ) -> list[str]:
         lines = [
-            "[bold]SKTR Review[/bold]",
+            f"[bold]{translator.text('review', 'SKTR Review')}[/bold]",
             "",
-            "[bold]Summary[/bold]",
-            f"Risk: {risk_level(score).title()}",
-            f"Score: {score}/100",
-            f"Changed files: {len(result.context.file_changes)}",
-            f"Excluded files: {len(result.context.excluded_files)}",
-            f"Issues: {len(result.issues)}",
+            f"[bold]{translator.text('summary', 'Summary')}[/bold]",
+            f"{translator.text('risk', 'Risk')}: {translator.severity(risk_level(score))}",
+            f"{translator.text('score', 'Score')}: {score}/100",
+            f"{translator.text('changed_files', 'Changed files')}: {len(result.context.file_changes)}",
+            f"{translator.text('excluded_files', 'Excluded files')}: {len(result.context.excluded_files)}",
+            f"{translator.text('issues', 'Issues')}: {len(result.issues)}",
         ]
         if breadth["production_files"] or breadth["modules"]:
             lines.append(
-                f"Review breadth: {breadth['production_files']} production files across "
-                f"{breadth['modules']} modules"
+                translator.text(
+                    "review_breadth",
+                    "Review breadth: {production_files} production files across {modules} modules",
+                    production_files=breadth["production_files"],
+                    modules=breadth["modules"],
+                )
             )
         return lines
 
-    def _changed_file_lines(self, result: ReviewResult) -> list[str]:
+    def _changed_file_lines(self, result: ReviewResult, translator: Translator) -> list[str]:
         if not result.context.file_changes:
-            message, guidance = _empty_review_state(result)
-            lines = ["", "[bold]Review State[/bold]", message]
+            message, guidance = _empty_review_state(result, translator)
+            lines = [
+                "",
+                f"[bold]{translator.text('review_state', 'Review State')}[/bold]",
+                message,
+            ]
             if guidance:
                 lines.append(guidance)
             return lines
         return [
             "",
-            "[bold]Changed Files[/bold]",
+            f"[bold]{translator.text('changed_files', 'Changed Files')}[/bold]",
             *[
                 f"{self._status_label(change.status)} {escape(change.path)}"
                 for change in result.context.file_changes
             ],
         ]
 
-    def _metadata_lines(self, result: ReviewResult) -> list[str]:
-        lines = ["", "[bold]Metadata[/bold]", "Generated by SKTR.", f"Status: {result.status}"]
+    def _metadata_lines(self, result: ReviewResult, translator: Translator) -> list[str]:
+        lines = [
+            "",
+            f"[bold]{translator.text('metadata', 'Metadata')}[/bold]",
+            translator.text("generated_by", "Generated by SKTR."),
+            f"{translator.text('status', 'Status')}: {translator.status(result.status)}",
+        ]
+        if "output_language" in result.metadata:
+            lines.append(
+                f"{translator.text('language', 'Language')}: {translator.requested}"
+            )
         if result.metadata.get("generated_at"):
-            lines.append(f"Generated at: {escape(str(result.metadata['generated_at']))}")
+            lines.append(
+                f"{translator.text('generated_at', 'Generated at')}: "
+                f"{escape(str(result.metadata['generated_at']))}"
+            )
         if result.context.metadata.get("review_scope"):
-            lines.append(f"Review scope: {result.context.metadata['review_scope']}")
+            lines.append(
+                f"{translator.text('review_scope', 'Review scope')}: "
+                f"{translator.scope(str(result.context.metadata['review_scope']))}"
+            )
         if result.context.metadata.get("repository_root"):
-            lines.append(f"Repository root: {escape(str(result.context.metadata['repository_root']))}")
+            lines.append(
+                f"{translator.text('repository_root', 'Repository root')}: "
+                f"{escape(str(result.context.metadata['repository_root']))}"
+            )
+        if translator.language == "en" and translator.requested.split("-", 1)[0] != "en":
+            lines.append(
+                translator.text(
+                    "language_fallback",
+                    (
+                        "Language `{requested}` does not have a complete catalog; deterministic "
+                        "text is shown in English and AI content is requested in `{requested}`."
+                    ),
+                    requested=translator.requested,
+                )
+            )
         return lines
 
-    def _ai_review_lines(self, result: ReviewResult) -> list[str]:
-        lines = ["", "[bold]AI Review[/bold]"]
+    def _ai_review_lines(self, result: ReviewResult, translator: Translator) -> list[str]:
+        lines = ["", f"[bold]{translator.text('ai_review', 'AI Review')}[/bold]"]
         if result.ai_review.overview:
-            lines.extend(["[bold]Overview[/bold]", escape(result.ai_review.overview)])
+            lines.extend(
+                [
+                    f"[bold]{translator.text('overview', 'Overview')}[/bold]",
+                    escape(result.ai_review.overview),
+                ]
+            )
         if result.ai_review.recommendations:
             lines.append("")
-            lines.append("[bold]Prioritized Actions[/bold]")
-            lines.extend(self._recommendation_lines(result))
-        lines.extend(f"[yellow]Warning:[/yellow] {escape(warning)}" for warning in result.ai_review.warnings)
+            lines.append(
+                f"[bold]{translator.text('prioritized_actions', 'Prioritized Actions')}[/bold]"
+            )
+            lines.extend(self._recommendation_lines(result, translator))
+        lines.extend(
+            f"[yellow]{translator.text('warning', 'Warning')}:[/yellow] {escape(warning)}"
+            for warning in result.ai_review.warnings
+        )
         return lines
 
-    def _findings_lines(self, issues: list[Issue]) -> list[str]:
+    def _findings_lines(self, issues: list[Issue], translator: Translator) -> list[str]:
         lines: list[str] = []
         groups = _issue_groups(issues)
         for severity in _SEVERITY_ORDER:
@@ -122,29 +185,52 @@ class TerminalOutput:
                 continue
             if lines:
                 lines.append("")
-            lines.append(f"[bold]{severity.value.title()}[/bold]")
+            lines.append(f"[bold]{translator.severity(severity.value)}[/bold]")
             for group in severity_groups:
-                count = f" ({len(group.issues)} occurrences)" if len(group.issues) > 1 else ""
-                lines.append(f"[yellow]⚠[/yellow] {escape(group.title)}{count}")
+                count = (
+                    " ("
+                    + translator.text(
+                        "occurrences",
+                        "{count} occurrences",
+                        count=len(group.issues),
+                    )
+                    + ")"
+                    if len(group.issues) > 1
+                    else ""
+                )
+                lines.append(
+                    f"[yellow]⚠[/yellow] {escape(translator.issue_title(group.issues[0]))}{count}"
+                )
                 if len(group.issues) == 1:
-                    lines.extend(f"  {line}" for line in _terminal_issue_body(group.issues[0]))
+                    lines.extend(
+                        f"  {line}"
+                        for line in _terminal_issue_body(group.issues[0], translator)
+                    )
                 else:
-                    lines.append(f"  Affected files: {_format_files(_issue_files(group.issues), markdown=False)}")
+                    lines.append(
+                        f"  {translator.text('affected_files', 'Affected files')}: "
+                        f"{_format_files(_issue_files(group.issues), markdown=False, translator=translator)}"
+                    )
         return lines
 
-    def _category_lines(self, issues: list[Issue]) -> list[str]:
+    def _category_lines(self, issues: list[Issue], translator: Translator) -> list[str]:
         lines: list[str] = []
         categories = sorted({issue.category for issue in issues}, key=lambda value: value.value)
         for category in categories:
             category_issues = [issue for issue in issues if issue.category == category]
             lines.append(
-                f"{category.value.title()}: {len(category_issues)} issues | "
-                f"highest {_highest_severity(category_issues).value.title()} | "
-                f"{len(_issue_files(category_issues))} files"
+                f"{translator.category(category.value)}: {len(category_issues)} "
+                f"{translator.text('issues', 'issues').lower()} | "
+                f"{translator.text('highest_severity', 'highest')} "
+                f"{translator.severity(_highest_severity(category_issues).value)} | "
+                f"{len(_issue_files(category_issues))} "
+                f"{translator.text('file', 'files').lower()}"
             )
         return lines
 
-    def _recommendation_lines(self, result: ReviewResult) -> list[str]:
+    def _recommendation_lines(
+        self, result: ReviewResult, translator: Translator
+    ) -> list[str]:
         assert result.ai_review is not None
         lines: list[str] = []
         for index, item in enumerate(result.ai_review.recommendations, start=1):
@@ -153,12 +239,16 @@ class TerminalOutput:
             lines.extend(
                 [
                     f"[bold]{index}. {escape(item.title)}[/bold]",
-                    f"   Why: {escape(item.why)}",
-                    f"   Suggested action: {escape(item.suggested_action)}",
+                    f"   {translator.text('why', 'Why')}: {escape(item.why)}",
+                    f"   {translator.text('suggested_action', 'Suggested action')}: "
+                    f"{escape(item.suggested_action)}",
                 ]
             )
             if item.related_files:
-                lines.append(f"   Related files: {escape(', '.join(item.related_files))}")
+                lines.append(
+                    f"   {translator.text('related_files', 'Related files')}: "
+                    f"{escape(', '.join(item.related_files))}"
+                )
         return lines
 
     def _status_label(self, status: str) -> str:
@@ -193,109 +283,190 @@ class MarkdownOutput:
         sys.stdout.write(content + "\n")
 
     def render(self, result: ReviewResult) -> str:
+        translator = _translator(result)
         score = risk_score(result)
         breadth = review_breadth(result)
-        lines = self._summary_lines(result, score, breadth)
-        lines.extend(self._changed_file_lines(result))
+        lines = self._summary_lines(result, score, breadth, translator)
+        lines.extend(self._changed_file_lines(result, translator))
 
         if result.issues:
             lines.append("")
-            lines.append("## Findings")
-            lines.extend(self._issues_by_severity(result.issues))
+            lines.append(f"## {translator.text('findings', 'Findings')}")
+            lines.extend(self._issues_by_severity(result.issues, translator))
 
             lines.append("")
-            lines.append("## Findings by Category")
-            lines.extend(self._issues_by_category(result.issues))
+            lines.append(
+                f"## {translator.text('findings_by_category', 'Findings by Category')}"
+            )
+            lines.extend(self._issues_by_category(result.issues, translator))
 
         if result.diagnostics:
-            lines.extend(["", "## Analysis Diagnostics", "| Severity | Analyzer | File | Message |", "|---|---|---|---|"])
+            lines.extend(
+                [
+                    "",
+                    f"## {translator.text('analysis_diagnostics', 'Analysis Diagnostics')}",
+                    (
+                        f"| {translator.text('severity', 'Severity')} | "
+                        f"{translator.text('analyzer', 'Analyzer')} | "
+                        f"{translator.text('file', 'File')} | "
+                        f"{translator.text('message', 'Message')} |"
+                    ),
+                    "|---|---|---|---|",
+                ]
+            )
             for diagnostic in result.diagnostics:
-                lines.append(_markdown_diagnostic(diagnostic))
+                lines.append(_markdown_diagnostic(diagnostic, translator))
 
         if result.ai_review is not None:
-            lines.extend(self._ai_review_lines(result))
+            lines.extend(self._ai_review_lines(result, translator))
 
-        suggestions = _suggestions(result)
+        suggestions = _suggestions(result, translator)
         if suggestions:
             lines.append("")
-            lines.append("## Suggested Actions")
+            lines.append(
+                f"## {translator.text('suggested_actions', 'Suggested Actions')}"
+            )
             for suggestion in suggestions:
                 lines.append(f"- {suggestion}")
 
         if result.messages:
             lines.append("")
-            lines.append("## Notes")
-            lines.extend(f"- {message}" for message in result.messages)
+            lines.append(f"## {translator.text('notes', 'Notes')}")
+            lines.extend(f"- {translator.message(message)}" for message in result.messages)
 
-        lines.extend(self._metadata_lines(result))
+        lines.extend(self._metadata_lines(result, translator))
 
         return "\n".join(lines)
 
-    def _summary_lines(self, result: ReviewResult, score: int, breadth: dict[str, int]) -> list[str]:
+    def _summary_lines(
+        self,
+        result: ReviewResult,
+        score: int,
+        breadth: dict[str, int],
+        translator: Translator,
+    ) -> list[str]:
         lines = [
-            "# SKTR Review",
+            f"# {translator.text('review', 'SKTR Review')}",
             "",
-            "## Summary",
-            f"Risk: {risk_level(score).title()}  ",
-            f"Score: {score}/100  ",
-            f"Changed files: {len(result.context.file_changes)}  ",
-            f"Excluded files: {len(result.context.excluded_files)}  ",
-            f"Issues: {len(result.issues)}",
+            f"## {translator.text('summary', 'Summary')}",
+            f"{translator.text('risk', 'Risk')}: {translator.severity(risk_level(score))}  ",
+            f"{translator.text('score', 'Score')}: {score}/100  ",
+            f"{translator.text('changed_files', 'Changed files')}: {len(result.context.file_changes)}  ",
+            f"{translator.text('excluded_files', 'Excluded files')}: {len(result.context.excluded_files)}  ",
+            f"{translator.text('issues', 'Issues')}: {len(result.issues)}",
         ]
         if breadth["production_files"] or breadth["modules"]:
             lines.append(
-                f"Review breadth: {breadth['production_files']} production files across "
-                f"{breadth['modules']} modules"
+                translator.text(
+                    "review_breadth",
+                    "Review breadth: {production_files} production files across {modules} modules",
+                    production_files=breadth["production_files"],
+                    modules=breadth["modules"],
+                )
             )
         return lines
 
-    def _changed_file_lines(self, result: ReviewResult) -> list[str]:
+    def _changed_file_lines(self, result: ReviewResult, translator: Translator) -> list[str]:
         if not result.context.file_changes:
-            message, guidance = _empty_review_state(result)
-            lines = ["", "## Review State", "", f"**{message}**"]
+            message, guidance = _empty_review_state(result, translator)
+            lines = [
+                "",
+                f"## {translator.text('review_state', 'Review State')}",
+                "",
+                f"**{message}**",
+            ]
             if guidance:
                 lines.extend(["", guidance])
             return lines
-        lines = ["", "## Changed Files", "| Status | File |", "|---|---|"]
+        lines = [
+            "",
+            f"## {translator.text('changed_files', 'Changed Files')}",
+            (
+                f"| {translator.text('status', 'Status')} | "
+                f"{translator.text('file', 'File')} |"
+            ),
+            "|---|---|",
+        ]
         lines.extend(
             f"| {self._status_label(change.status)} | {change.path} |"
             for change in result.context.file_changes
         )
         return lines
 
-    def _ai_review_lines(self, result: ReviewResult) -> list[str]:
+    def _ai_review_lines(self, result: ReviewResult, translator: Translator) -> list[str]:
         assert result.ai_review is not None
-        lines = ["", "## AI Review"]
+        lines = ["", f"## {translator.text('ai_review', 'AI Review')}"]
         if result.ai_review.overview:
-            lines.extend(["", "### Overview", result.ai_review.overview])
+            lines.extend(
+                ["", f"### {translator.text('overview', 'Overview')}", result.ai_review.overview]
+            )
         if result.ai_review.recommendations:
-            lines.extend(["", "### Prioritized Actions"])
+            lines.extend(
+                [
+                    "",
+                    f"### {translator.text('prioritized_actions', 'Prioritized Actions')}",
+                ]
+            )
             for index, item in enumerate(result.ai_review.recommendations, start=1):
                 lines.extend(
                     [
                         "",
                         f"#### {index}. {item.title}",
                         "",
-                        f"**Why:** {item.why}",
+                        f"**{translator.text('why', 'Why')}:** {item.why}",
                         "",
-                        f"**Suggested action:** {item.suggested_action}",
+                        f"**{translator.text('suggested_action', 'Suggested action')}:** "
+                        f"{item.suggested_action}",
                     ]
                 )
                 if item.related_files:
-                    lines.extend(["", "**Related files:**", ""])
+                    lines.extend(
+                        ["", f"**{translator.text('related_files', 'Related files')}:**", ""]
+                    )
                     lines.extend(f"- `{path}`" for path in item.related_files)
         for warning in result.ai_review.warnings:
-            lines.extend(["", f"Warning: {warning}"])
+            lines.extend(
+                ["", f"{translator.text('warning', 'Warning')}: {warning}"]
+            )
         return lines
 
-    def _metadata_lines(self, result: ReviewResult) -> list[str]:
-        lines = ["", "## Metadata", "Generated by SKTR.", f"Status: {result.status}"]
+    def _metadata_lines(self, result: ReviewResult, translator: Translator) -> list[str]:
+        lines = [
+            "",
+            f"## {translator.text('metadata', 'Metadata')}",
+            translator.text("generated_by", "Generated by SKTR."),
+            f"{translator.text('status', 'Status')}: {translator.status(result.status)}",
+        ]
+        if "output_language" in result.metadata:
+            lines.append(
+                f"{translator.text('language', 'Language')}: {translator.requested}"
+            )
         if result.metadata.get("generated_at"):
-            lines.append(f"Generated at: {result.metadata['generated_at']}")
+            lines.append(
+                f"{translator.text('generated_at', 'Generated at')}: "
+                f"{result.metadata['generated_at']}"
+            )
         if result.context.metadata.get("review_scope"):
-            lines.append(f"Review scope: {result.context.metadata['review_scope']}")
+            lines.append(
+                f"{translator.text('review_scope', 'Review scope')}: "
+                f"{translator.scope(str(result.context.metadata['review_scope']))}"
+            )
         if result.context.metadata.get("repository_root"):
-            lines.append(f"Repository root: {result.context.metadata['repository_root']}")
+            lines.append(
+                f"{translator.text('repository_root', 'Repository root')}: "
+                f"{result.context.metadata['repository_root']}"
+            )
+        if translator.language == "en" and translator.requested.split("-", 1)[0] != "en":
+            lines.append(
+                translator.text(
+                    "language_fallback",
+                    (
+                        "Language `{requested}` does not have a complete catalog; deterministic "
+                        "text is shown in English and AI content is requested in `{requested}`."
+                    ),
+                    requested=translator.requested,
+                )
+            )
         return lines
 
     def _status_label(self, status: str) -> str:
@@ -306,20 +477,30 @@ class MarkdownOutput:
             "renamed": "R",
         }.get(status, "?")
 
-    def _issues_by_severity(self, issues: list[Issue]) -> list[str]:
+    def _issues_by_severity(
+        self, issues: list[Issue], translator: Translator
+    ) -> list[str]:
         lines: list[str] = []
         groups = _issue_groups(issues)
         for severity in _SEVERITY_ORDER:
             severity_groups = [group for group in groups if group.severity == severity]
             if not severity_groups:
                 continue
-            lines.append(f"### {severity.value.title()}")
-            lines.extend(self._issue_bullets(severity_groups))
+            lines.append(f"### {translator.severity(severity.value)}")
+            lines.extend(self._issue_bullets(severity_groups, translator))
         return lines
 
-    def _issues_by_category(self, issues: list[Issue]) -> list[str]:
+    def _issues_by_category(
+        self, issues: list[Issue], translator: Translator
+    ) -> list[str]:
         lines: list[str] = [
-            "| Category | Issues | Highest severity | Affected files | Rules |",
+            (
+                f"| {translator.text('category', 'Category')} | "
+                f"{translator.text('issues', 'Issues')} | "
+                f"{translator.text('highest_severity', 'Highest severity')} | "
+                f"{translator.text('affected_files', 'Affected files')} | "
+                f"{translator.text('rules', 'Rules')} |"
+            ),
             "|---|---:|---|---|---|",
         ]
         categories = sorted({issue.category for issue in issues}, key=lambda category: category.value)
@@ -327,49 +508,87 @@ class MarkdownOutput:
             category_issues = [issue for issue in issues if issue.category == category]
             lines.append(
                 "| "
-                f"{category.value.title()} | "
+                f"{translator.category(category.value)} | "
                 f"{len(category_issues)} | "
-                f"{_highest_severity(category_issues).value.title()} | "
-                f"{_format_files(_issue_files(category_issues), markdown=True)} | "
-                f"{self._rule_names(category_issues)} |"
+                f"{translator.severity(_highest_severity(category_issues).value)} | "
+                f"{_format_files(_issue_files(category_issues), markdown=True, translator=translator)} | "
+                f"{self._rule_names(category_issues, translator)} |"
             )
         return lines
 
-    def _rule_names(self, issues: list[Issue]) -> str:
-        rules = sorted({issue.metadata.get("rule_name") or issue.rule_id or "unknown" for issue in issues})
+    def _rule_names(self, issues: list[Issue], translator: Translator) -> str:
+        rules = sorted(
+            {
+                (
+                    translator.issue_title(issue)
+                    if translator.language == "es" and issue.metadata.get("rule_key")
+                    else issue.metadata.get("rule_name") or issue.rule_id or "unknown"
+                )
+                for issue in issues
+            }
+        )
         return ", ".join(str(rule) for rule in rules)
 
-    def _issue_bullets(self, groups: list["_IssueGroup"]) -> list[str]:
+    def _issue_bullets(
+        self, groups: list["_IssueGroup"], translator: Translator
+    ) -> list[str]:
         lines: list[str] = []
         for group in groups:
-            count = f" ({len(group.issues)} occurrences)" if len(group.issues) > 1 else ""
-            lines.append(f"- **{group.title}**{count}")
+            count = (
+                " ("
+                + translator.text(
+                    "occurrences",
+                    "{count} occurrences",
+                    count=len(group.issues),
+                )
+                + ")"
+                if len(group.issues) > 1
+                else ""
+            )
+            lines.append(f"- **{translator.issue_title(group.issues[0])}**{count}")
             if len(group.issues) == 1:
-                lines.extend(f"  {line}" for line in self._issue_body(group.issues[0]))
+                lines.extend(
+                    f"  {line}"
+                    for line in self._issue_body(group.issues[0], translator)
+                )
             else:
                 lines.append(
-                    f"  Affected files: {_format_files(_issue_files(group.issues), markdown=True)}"
+                    f"  {translator.text('affected_files', 'Affected files')}: "
+                    f"{_format_files(_issue_files(group.issues), markdown=True, translator=translator)}"
                 )
         return lines
 
-    def _issue_body(self, issue: Issue) -> list[str]:
+    def _issue_body(self, issue: Issue, translator: Translator) -> list[str]:
         if issue.metadata.get("rule_key") == "forbidden_dependency":
             source = issue.metadata.get("source", "")
             target = issue.metadata.get("target", "")
-            reason = issue.metadata.get("reason") or "This violates configured dependency rules."
+            reason = issue.metadata.get("reason") or translator.text(
+                "configured_dependency_violation",
+                "This violates configured dependency rules.",
+            )
             return [
-                f"`{source}` imports `{target}`.",
-                f"Reason: {reason}",
+                translator.text(
+                    "imports_markdown",
+                    "`{source}` imports `{target}`.",
+                    source=source,
+                    target=target,
+                ),
+                f"{translator.text('reason', 'Reason')}: {reason}",
             ]
 
         if issue.metadata.get("rule_key") == "large_function":
             symbol = issue.metadata.get("symbol", issue.title)
             line_count = issue.metadata.get("line_count", "unknown")
             return [
-                f"`{symbol}` has {line_count} lines.",
+                translator.text(
+                    "function_lines_markdown",
+                    "`{symbol}` has {count} lines.",
+                    symbol=symbol,
+                    count=line_count,
+                ),
             ]
 
-        return [issue.description]
+        return [translator.issue_description(issue)]
 
 
 _SEVERITY_ORDER = [
@@ -419,12 +638,19 @@ def _issue_files(issues: list[Issue]) -> list[str]:
     return sorted(paths)
 
 
-def _format_files(files: list[str], *, markdown: bool) -> str:
+def _format_files(
+    files: list[str], *, markdown: bool, translator: Translator
+) -> str:
     if not files:
         return "-"
     shown = files[:3]
     values = [f"`{path}`" if markdown else escape(path) for path in shown]
-    suffix = f", +{len(files) - 3} more" if len(files) > 3 else ""
+    suffix = (
+        ", +"
+        + translator.text("more", "{count} more", count=len(files) - 3)
+        if len(files) > 3
+        else ""
+    )
     return ", ".join(values) + suffix
 
 
@@ -432,37 +658,60 @@ def _highest_severity(issues: list[Issue]) -> IssueSeverity:
     return max(issues, key=lambda issue: _SEVERITY_WEIGHT[issue.severity]).severity
 
 
-def _terminal_issue_body(issue: Issue) -> list[str]:
+def _terminal_issue_body(issue: Issue, translator: Translator) -> list[str]:
     if issue.metadata.get("rule_key") == "forbidden_dependency":
         source = issue.metadata.get("source", "")
         target = issue.metadata.get("target", "")
-        reason = issue.metadata.get("reason") or "This violates configured dependency rules."
-        return [f"{escape(str(source))} imports {escape(str(target))}", f"Reason: {escape(str(reason))}"]
+        reason = issue.metadata.get("reason") or translator.text(
+            "configured_dependency_violation",
+            "This violates configured dependency rules.",
+        )
+        return [
+            translator.text(
+                "imports",
+                "{source} imports {target}",
+                source=escape(str(source)),
+                target=escape(str(target)),
+            ),
+            f"{translator.text('reason', 'Reason')}: {escape(str(reason))}",
+        ]
     if issue.metadata.get("rule_key") == "large_function":
         symbol = issue.metadata.get("symbol", issue.title)
         line_count = issue.metadata.get("line_count", "unknown")
-        return [f"{escape(str(symbol))} has {line_count} lines."]
-    return [escape(issue.description)]
+        return [
+            translator.text(
+                "function_lines",
+                "{symbol} has {count} lines.",
+                symbol=escape(str(symbol)),
+                count=line_count,
+            )
+        ]
+    return [escape(translator.issue_description(issue))]
 
 
-def _terminal_diagnostic(diagnostic: AnalysisDiagnostic) -> str:
+def _terminal_diagnostic(
+    diagnostic: AnalysisDiagnostic, translator: Translator
+) -> str:
     line = f":{diagnostic.location.start_line}" if diagnostic.location and diagnostic.location.start_line else ""
     return (
-        f"[{diagnostic.severity.value.upper()}] {escape(diagnostic.file_path)}{line} "
+        f"[{translator.severity(diagnostic.severity.value).upper()}] "
+        f"{escape(diagnostic.file_path)}{line} "
         f"({escape(diagnostic.analyzer)}/{escape(diagnostic.code)}): {escape(diagnostic.message)}"
     )
 
 
-def _markdown_diagnostic(diagnostic: AnalysisDiagnostic) -> str:
+def _markdown_diagnostic(
+    diagnostic: AnalysisDiagnostic, translator: Translator
+) -> str:
     line = f":{diagnostic.location.start_line}" if diagnostic.location and diagnostic.location.start_line else ""
     message = diagnostic.message.replace("|", "\\|").replace("\n", " ")
     return (
-        f"| {diagnostic.severity.value.title()} | {diagnostic.analyzer} | "
+        f"| {translator.severity(diagnostic.severity.value)} | {diagnostic.analyzer} | "
         f"`{diagnostic.file_path}{line}` | {message} |"
     )
 
 
-def _suggestions(result: ReviewResult) -> list[str]:
+def _suggestions(result: ReviewResult, translator: Translator) -> list[str]:
     suggestions: list[str] = []
     for issue in result.issues:
         suggestion = issue.metadata.get("suggestion")
@@ -474,6 +723,7 @@ def _suggestions(result: ReviewResult) -> list[str]:
             candidate = "Route the dependency through the configured boundary instead of importing it directly."
         else:
             continue
+        candidate = translator.suggestion(candidate)
         if not _covered_by_ai(result, issue, candidate):
             suggestions.append(candidate)
     return sorted(dict.fromkeys(suggestions))
@@ -527,15 +777,43 @@ def _write_text(destination: str, content: str) -> None:
     path.write_text(content + "\n", encoding="utf-8")
 
 
-def _empty_review_state(result: ReviewResult) -> tuple[str, str | None]:
+def _translator(result: ReviewResult) -> Translator:
+    requested = str(result.metadata.get("output_language", "en"))
+    return Translator.for_language(requested)
+
+
+def _empty_review_state(
+    result: ReviewResult, translator: Translator
+) -> tuple[str, str | None]:
     scope = result.context.metadata.get("review_scope")
     if scope == "working_tree":
         return (
-            "No tracked changes found.",
-            "Untracked files are not included. Stage them with `git add` before reviewing.",
+            translator.text("no_tracked_changes", "No tracked changes found."),
+            translator.text(
+                "untracked_guidance",
+                "Untracked files are not included. Stage them with `git add` before reviewing.",
+            ),
         )
     if scope == "branch":
-        return "No changes found for the selected branch comparison.", None
+        return (
+            translator.text(
+                "no_branch_changes",
+                "No changes found for the selected branch comparison.",
+            ),
+            None,
+        )
     if scope == "commit":
-        return "No changes found for the selected commit.", None
-    return "No changes found for this review scope.", None
+        return (
+            translator.text(
+                "no_commit_changes",
+                "No changes found for the selected commit.",
+            ),
+            None,
+        )
+    return (
+        translator.text(
+            "no_scope_changes",
+            "No changes found for this review scope.",
+        ),
+        None,
+    )
