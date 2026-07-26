@@ -14,7 +14,7 @@ from sktr_core.model import IssueSeverity, ReviewResult
 from sktr_core.pipeline import ReviewPipeline, filter_git_diff
 from sktr_core.plugins import MissingPluginError, PluginRegistry
 from sktr_core.version import SKTR_VERSION
-from sktr_ai import NullAIProvider, resolve_openai_api_key
+from sktr_ai import NullAIProvider, resolve_anthropic_api_key, resolve_openai_api_key
 from sktr_enrichment import KnowledgeEnrichmentEngine
 from sktr_graph import Graph, GraphBuilder, GraphLevel, GraphQuery, GraphScope
 from sktr_git import GitProviderError, ReviewScope, SubprocessGitProvider
@@ -452,15 +452,23 @@ def ai_doctor(
     typer.echo(f"AI provider: {provider}")
     if config.ai.model:
         typer.echo(f"AI model: {config.ai.model}")
-    if provider not in {"openai", "sktr-openai"}:
+    if provider in {"openai", "sktr-openai"}:
+        resolution = resolve_openai_api_key()
+        missing_message = "Set SKTR_OPENAI_API_KEY or OPENAI_API_KEY, then run `sktr ai doctor` again."
+    elif provider in {"anthropic", "sktr-anthropic"}:
+        resolution = resolve_anthropic_api_key()
+        missing_message = (
+            "Set SKTR_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY, "
+            "then run `sktr ai doctor` again."
+        )
+    else:
         typer.echo("API key: not checked for this provider")
         return
 
-    resolution = resolve_openai_api_key()
     if resolution.source is None:
         typer.echo("API key: missing")
         typer.echo()
-        typer.echo("Set SKTR_OPENAI_API_KEY or OPENAI_API_KEY, then run `sktr ai doctor` again.")
+        typer.echo(missing_message)
     else:
         typer.echo(f"API key: found via {resolution.source}")
 

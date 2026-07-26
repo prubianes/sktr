@@ -7,6 +7,7 @@ from pathlib import Path
 
 from rich.console import Console
 from rich.markup import escape
+from rich.text import Text
 
 from sktr_core.model import AnalysisDiagnostic, Issue, IssueSeverity, ReviewResult
 from sktr_core.plugins import Output
@@ -20,7 +21,7 @@ class TerminalOutput:
     def write(self, result: ReviewResult, destination: str | None = None) -> None:
         content = self.render(result)
         if destination is not None:
-            _write_text(destination, content)
+            _write_text(destination, Text.from_markup(content).plain)
             return
 
         Console(file=sys.stdout).print(content)
@@ -77,7 +78,11 @@ class TerminalOutput:
 
     def _changed_file_lines(self, result: ReviewResult) -> list[str]:
         if not result.context.file_changes:
-            return [f"Status: {result.status}"]
+            message, guidance = _empty_review_state(result)
+            lines = ["", "[bold]Review State[/bold]", message]
+            if guidance:
+                lines.append(guidance)
+            return lines
         return [
             "",
             "[bold]Changed Files[/bold]",
@@ -245,13 +250,17 @@ class MarkdownOutput:
         return lines
 
     def _changed_file_lines(self, result: ReviewResult) -> list[str]:
+        if not result.context.file_changes:
+            message, guidance = _empty_review_state(result)
+            lines = ["", "## Review State", "", f"**{message}**"]
+            if guidance:
+                lines.extend(["", guidance])
+            return lines
         lines = ["", "## Changed Files", "| Status | File |", "|---|---|"]
         lines.extend(
             f"| {self._status_label(change.status)} | {change.path} |"
             for change in result.context.file_changes
         )
-        if not result.context.file_changes:
-            lines.append("| - | No changed files |")
         return lines
 
     def _ai_review_lines(self, result: ReviewResult) -> list[str]:
@@ -516,3 +525,17 @@ def _write_text(destination: str, content: str) -> None:
     path = Path(destination)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content + "\n", encoding="utf-8")
+
+
+def _empty_review_state(result: ReviewResult) -> tuple[str, str | None]:
+    scope = result.context.metadata.get("review_scope")
+    if scope == "working_tree":
+        return (
+            "No tracked changes found.",
+            "Untracked files are not included. Stage them with `git add` before reviewing.",
+        )
+    if scope == "branch":
+        return "No changes found for the selected branch comparison.", None
+    if scope == "commit":
+        return "No changes found for the selected commit.", None
+    return "No changes found for this review scope.", None

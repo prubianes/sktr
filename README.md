@@ -8,9 +8,9 @@
 
 Understand your software before you change it.
 
-> **Release candidate:** `1.0.0rc1` is the first public preview of the v1
-> interface and artifact contract. Please report reproducible feedback through
-> the [issue tracker](https://github.com/prubianes/sktr/issues).
+> **Stable release:** `1.0.0` is the first stable SKTR interface and artifact
+> contract. Please report reproducible feedback through the
+> [issue tracker](https://github.com/prubianes/sktr/issues).
 
 SKTR is a language-agnostic software intelligence CLI. It turns Git changes into
 a structured knowledge model, enriches that model with deterministic engineering
@@ -53,14 +53,14 @@ result as a versioned JSON artifact rather than only printing prose.
 - Terminal, Markdown, JSON, and Mermaid output
 - Plugin discovery and diagnostics
 - CI severity gates, path exclusions, and parse diagnostics
-- Optional OpenAI-powered explanations and recommendations
+- Optional OpenAI- or Anthropic Claude-powered explanations and recommendations
 
 ## Quickstart
 
-SKTR requires Python 3.13 or newer and a Git repository. Install RC1 explicitly:
+SKTR requires Python 3.11 or newer and a Git repository:
 
 ```bash
-python -m pip install --pre sktr==1.0.0rc1
+python -m pip install sktr==1.0.0
 sktr --version
 sktr --help
 cd your-project
@@ -190,7 +190,27 @@ sktr review --ai
 ```
 
 OpenAI key resolution is `SKTR_OPENAI_API_KEY` first, then `OPENAI_API_KEY`.
-SKTR never stores or prints the key. See [AI setup](docs/ai.md).
+Claude is also supported:
+
+```bash
+export ANTHROPIC_API_KEY="your-api-key"
+sktr ai doctor
+sktr review --ai
+```
+
+Configure Claude in `sktr.yml`:
+
+```yaml
+ai:
+  enabled: true
+  provider: anthropic
+  model: claude-sonnet-5
+```
+
+Anthropic key resolution is `SKTR_ANTHROPIC_API_KEY` first, then
+`ANTHROPIC_API_KEY`. The SKTR-specific variable is useful when you want a
+separate key for SKTR. SKTR never stores or prints provider keys. See
+[AI setup](docs/ai.md).
 
 ## Plugins
 
@@ -236,7 +256,7 @@ uv run sktr review
 Read [CONTRIBUTING.md](CONTRIBUTING.md) and
 [development.md](docs/development.md) before adding an analyzer, rule, output,
 or provider. Release work is tracked in the
-[v1.0.0rc1 checklist](docs/release-checklist.md).
+[v1.0.0 checklist](docs/release-checklist.md).
 
 For help, see [troubleshooting](docs/troubleshooting.md) and the
 [known limitations](docs/limitations.md). Report sensitive vulnerabilities

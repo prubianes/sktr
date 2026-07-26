@@ -1,6 +1,6 @@
 # Known Limitations
 
-SKTR 1.0.0rc1 intentionally favors deterministic, reviewable evidence over broad
+SKTR 1.0.0 intentionally favors deterministic, reviewable evidence over broad
 heuristic coverage.
 
 - Working-tree reviews include tracked staged and unstaged changes. Untracked

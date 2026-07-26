@@ -1,7 +1,7 @@
 # CI Integration
 
-SKTR's own GitHub Actions CI runs the test and packaging matrix on Python 3.13
-and 3.14. The release workflow uses PyPI trusted publishing; its setup and tag
+SKTR's own GitHub Actions CI runs the test and packaging matrix on Python 3.11
+through 3.14. The release workflow uses PyPI trusted publishing; its setup and tag
 procedure are documented in [development.md](development.md#release-process).
 
 SKTR can write a canonical artifact and fail a job based only on deterministic
@@ -65,9 +65,9 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
-      - name: Install SKTR RC1
-        run: python -m pip install --pre sktr==1.0.0rc1
+          python-version: "3.11"
+      - name: Install SKTR
+        run: python -m pip install sktr==1.0.0
       - name: Review pull request
         run: >-
           sktr review --branch --base origin/${{ github.event.pull_request.base.ref }}

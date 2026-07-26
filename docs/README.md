@@ -14,7 +14,7 @@
 - [Known limitations](limitations.md)
 - [Roadmap through v0.20](roadmap.md)
 - [Artifact schema](schema/README.md)
-- [v1.0.0rc1 release checklist](release-checklist.md)
+- [v1.0.0 release checklist](release-checklist.md)
 - [Changelog](../CHANGELOG.md)
 - [Contributing](../CONTRIBUTING.md)
 - [Security policy](../SECURITY.md)

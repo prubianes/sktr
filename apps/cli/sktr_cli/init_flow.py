@@ -13,7 +13,14 @@ import questionary
 import typer
 from questionary import Choice, Style
 
-from sktr_ai import DEFAULT_OPENAI_MODEL, OPENAI_MODEL_PROFILES, resolve_openai_api_key
+from sktr_ai import (
+    ANTHROPIC_MODEL_PROFILES,
+    DEFAULT_ANTHROPIC_MODEL,
+    DEFAULT_OPENAI_MODEL,
+    OPENAI_MODEL_PROFILES,
+    resolve_anthropic_api_key,
+    resolve_openai_api_key,
+)
 from sktr_core.config import DEFAULT_ENABLED_RULES, DEFAULT_EXCLUDES
 from sktr_core.plugins import PluginRegistry
 
@@ -178,7 +185,7 @@ def default_answers(
         outputs=outputs,
         ai_enabled=bool(provider),
         ai_provider=provider,
-        ai_model=DEFAULT_OPENAI_MODEL if provider == "openai" else None,
+        ai_model=_default_ai_model(provider),
     )
 
 
@@ -247,7 +254,7 @@ def _with_ai(answers: InitAnswers, registry: PluginRegistry, prompter: InitPromp
     provider = prompter.select(
         "AI provider",
         [(record.metadata.name, record.metadata.name) for record in providers],
-        providers[0].metadata.name,
+        _default_ai_provider(registry) or providers[0].metadata.name,
     )
     if provider == "openai":
         custom = "__custom__"
@@ -258,6 +265,15 @@ def _with_ai(answers: InitAnswers, registry: PluginRegistry, prompter: InitPromp
         )
         if model == custom:
             model = prompter.text("Custom model ID", DEFAULT_OPENAI_MODEL)
+    elif provider == "anthropic":
+        custom = "__custom__"
+        model = prompter.select(
+            "Anthropic model",
+            [*ANTHROPIC_MODEL_PROFILES, ("Custom model ID", custom)],
+            DEFAULT_ANTHROPIC_MODEL,
+        )
+        if model == custom:
+            model = prompter.text("Custom model ID", DEFAULT_ANTHROPIC_MODEL)
     else:
         model = prompter.text("AI model", "default")
     return InitAnswers(
@@ -318,6 +334,10 @@ def print_preview(answers: InitAnswers) -> None:
         key = resolve_openai_api_key()
         source = f"found via {key.source}" if key.source else "missing"
         typer.echo(f"  API key:   {source}")
+    elif answers.ai_enabled and answers.ai_provider == "anthropic":
+        key = resolve_anthropic_api_key()
+        source = f"found via {key.source}" if key.source else "missing"
+        typer.echo(f"  API key:   {source}")
     typer.echo()
 
 
@@ -375,6 +395,14 @@ def _default_ai_provider(registry: PluginRegistry) -> str | None:
         return openai.metadata.name
     providers = registry.by_type("ai_provider")
     return providers[0].metadata.name if providers else None
+
+
+def _default_ai_model(provider: str | None) -> str | None:
+    if provider == "openai":
+        return DEFAULT_OPENAI_MODEL
+    if provider == "anthropic":
+        return DEFAULT_ANTHROPIC_MODEL
+    return None
 
 
 def _ordered_output_names(registry: PluginRegistry) -> list[str]:

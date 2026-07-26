@@ -2,14 +2,14 @@
 
 ## Install
 
-SKTR requires Python 3.13 or newer and Git.
+SKTR requires Python 3.11 or newer and Git.
 
 ```bash
-python -m pip install --pre sktr==1.0.0rc1
+python -m pip install sktr==1.0.0
 ```
 
-This installs the v1.0.0 release candidate. After the final v1 release, the
-standard installation command will be `python -m pip install sktr`.
+This installs the stable v1.0.0 release. To accept future compatible upgrades,
+use `python -m pip install sktr`.
 
 Confirm the installation and discover the available commands:
 
@@ -107,11 +107,22 @@ working-tree, branch, or commit change. See [architecture graphs](graphs.md).
 
 ## Enable AI features
 
+OpenAI:
+
 ```bash
 export SKTR_OPENAI_API_KEY="your-api-key"
 sktr ai doctor
 sktr review --ai
 sktr review --ai --model gpt-5.6-terra
+```
+
+Anthropic Claude:
+
+```bash
+export SKTR_ANTHROPIC_API_KEY="your-api-key"
+# Set ai.provider to anthropic and ai.model to claude-sonnet-5 in sktr.yml.
+sktr ai doctor
+sktr review --ai
 ```
 
 AI is optional. Without it, analyzers, enrichment, rules, scoring, and all output

@@ -13,7 +13,7 @@ Thanks for helping improve deterministic software intelligence.
 
 ## Development setup
 
-SKTR requires Python 3.13 or newer, Git, and
+SKTR requires Python 3.11 or newer, Git, and
 [uv](https://docs.astral.sh/uv/).
 
 ```bash
@@ -50,7 +50,6 @@ git diff --check
 ```
 
 Describe the behavior changed, tests performed, and any compatibility or artifact
-impact. CI repeats the suite and package smoke tests on Python 3.13 and 3.14.
+impact. CI repeats the suite and package smoke tests on Python 3.11 through 3.14.
 
 For vulnerabilities, do not open a public issue; follow [SECURITY.md](SECURITY.md).
-

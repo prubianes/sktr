@@ -1,18 +1,20 @@
 [project]
 name = "sktr"
-version = "1.0.0rc1"
+dynamic = ["version"]
 description = "Language-agnostic software intelligence and architecture review CLI"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 authors = [{ name = "Pablo Rubianes" }]
 license = "MIT"
 license-files = ["LICENSE"]
 keywords = ["architecture", "code-review", "developer-tools", "software-intelligence"]
 classifiers = [
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Production/Stable",
   "Environment :: Console",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
   "Topic :: Software Development :: Quality Assurance",
@@ -54,6 +56,7 @@ json = "sktr_report:JsonOutputPlugin"
 mermaid = "sktr_graph:MermaidOutputPlugin"
 
 [project.entry-points."sktr.ai_providers"]
+anthropic = "sktr_ai:AnthropicProviderPlugin"
 openai = "sktr_ai:OpenAIProviderPlugin"
 
 [dependency-groups]
@@ -69,6 +72,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["apps/cli", "packages"]
+
+[tool.setuptools.dynamic]
+version = { attr = "sktr_core.version.SKTR_VERSION" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

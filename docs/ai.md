@@ -7,7 +7,9 @@ The provider receives structured SKTR context: knowledge summary, grouped issues
 priority findings, module metrics, changed-file metadata, and dependency edges.
 It does not receive the full raw repository source or raw Git diff.
 
-## OpenAI setup
+## Provider setup
+
+### OpenAI
 
 Set an API key in the environment:
 
@@ -25,13 +27,41 @@ Resolution order:
 If both exist, the SKTR-specific variable wins. Keys are never stored in config,
 included in artifacts, or printed by diagnostics.
 
+### Anthropic Claude
+
+Set an Anthropic API key:
+
+```bash
+export SKTR_ANTHROPIC_API_KEY="your-api-key"
+sktr ai doctor
+sktr review --ai
+```
+
+Resolution order:
+
+1. `SKTR_ANTHROPIC_API_KEY`
+2. `ANTHROPIC_API_KEY`
+
+The SKTR-specific variable wins when both exist.
+
 ## Configuration
+
+OpenAI:
 
 ```yaml
 ai:
   enabled: true
   provider: openai
   model: gpt-5.6-terra
+```
+
+Anthropic Claude:
+
+```yaml
+ai:
+  enabled: true
+  provider: anthropic
+  model: claude-sonnet-5
 ```
 
 Select a model for one review:
@@ -49,8 +79,18 @@ Interactive init offers these OpenAI profiles:
 | Best quality | `gpt-5.6-sol` | Difficult, quality-first reviews |
 | Custom | User-provided | Snapshots, aliases, or future models |
 
+Interactive init offers these Anthropic profiles:
+
+| Profile | Model | Intended use |
+|---|---|---|
+| Balanced (recommended) | `claude-sonnet-5` | Architecture review with a quality/cost balance |
+| Fast | `claude-haiku-4-5` | Frequent and high-volume reviews |
+| Best quality | `claude-opus-5` | Difficult, quality-first reviews |
+| Custom | User-provided | Pinned snapshots or future models |
+
 SKTR does not restrict manual model IDs. Older existing configurations continue
-to load, while new OpenAI configurations default to Terra.
+to load. New OpenAI configurations default to Terra, while new Anthropic
+configurations default to Claude Sonnet 5.
 
 Disable configured AI features for one review:
 

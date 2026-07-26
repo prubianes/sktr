@@ -12,16 +12,16 @@ behind the language-agnostic Knowledge Model.
 This opening summary is intentionally self-contained so it can be copied into a
 planning conversation without the rest of the repository context.
 
-## v1.0.0rc1: Public Release Candidate
+## v1.0.0: Stable Release
 
-Goal: validate the complete v1 contract with real projects before declaring the
-final stable release.
+Goal: publish the stable v1 contract after validation with real projects.
 
-- [x] Promote package and built-in plugin metadata to `1.0.0rc1`.
+- [x] Promote package and built-in plugin metadata to `1.0.0`.
 - [x] Fail clearly when Git cannot resolve or prepare the selected review scope.
 - [x] Use standards-compliant safe YAML loading and preserve existing configs.
 - [x] Emit one RFC 3339 UTC timestamp across every output from a review run.
 - [x] Build and validate wheel and source distributions on Python 3.13 and 3.14.
+- [x] Expand final v1 compatibility and CI coverage to Python 3.11 and 3.12.
 - [x] Add least-privilege trusted publishing through a protected GitHub
   environment.
 - [x] Publish public CLI, troubleshooting, limitations, contribution, security,
@@ -29,7 +29,7 @@ final stable release.
 - [ ] Complete external CI, trusted-publisher, tag, and PyPI verification from
   the [release checklist](release-checklist.md).
 
-Acceptance: the exact `v1.0.0rc1` tag passes CI, publishes through PyPI trusted
+Acceptance: the exact `v1.0.0` tag passes CI, publishes through PyPI trusted
 publishing, installs into a clean environment, and produces a schema-valid
 artifact from a real repository.
 
@@ -159,7 +159,7 @@ architecture break.
 
 ## Deferred Until After V1
 
-- Additional AI providers
+- Additional AI providers beyond bundled OpenAI and Anthropic support
 - GitHub integration
 - Impact and explain commands
 - Dashboards and editor extensions
