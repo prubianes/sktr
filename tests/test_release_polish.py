@@ -53,7 +53,7 @@ def test_cli_reports_version() -> None:
     result = runner.invoke(cli_main.app, ["--version"])
 
     assert result.exit_code == 0
-    assert result.output.strip() == "sktr 1.0.0rc1"
+    assert result.output.strip() == "sktr 1.0.0"
 
 
 def test_review_accepts_explicit_config_path(tmp_path: Path, monkeypatch) -> None:
@@ -263,7 +263,7 @@ def test_public_docs_include_release_commands_and_current_ai_field() -> None:
     outputs = (ROOT / "docs" / "outputs.md").read_text(encoding="utf-8")
 
     for command in [
-        "python -m pip install --pre sktr==1.0.0rc1",
+        "python -m pip install sktr==1.0.0",
         "sktr init --yes",
         "sktr review --ai",
         "sktr review --format markdown --output REVIEW.md",
@@ -296,11 +296,16 @@ def test_package_import_smoke() -> None:
 
 def test_packaging_metadata_matches_release_contract() -> None:
     with (ROOT / "pyproject.toml").open("rb") as file:
-        project = tomllib.load(file)["project"]
+        configuration = tomllib.load(file)
+    project = configuration["project"]
 
     assert project["name"] == "sktr"
-    assert project["version"] == "1.0.0rc1"
-    assert project["requires-python"] == ">=3.13"
+    assert "version" not in project
+    assert project["dynamic"] == ["version"]
+    assert configuration["tool"]["setuptools"]["dynamic"]["version"] == {
+        "attr": "sktr_core.version.SKTR_VERSION"
+    }
+    assert project["requires-python"] == ">=3.11"
     assert project["readme"] == "README.md"
     assert project["license"] == "MIT"
     assert project["scripts"]["sktr"] == "sktr_cli.main:app"
@@ -314,8 +319,13 @@ def test_packaging_metadata_matches_release_contract() -> None:
     } <= set(
         project["dependencies"]
     )
-    assert "Development Status :: 4 - Beta" in project["classifiers"]
-    assert "Programming Language :: Python :: 3.14" in project["classifiers"]
+    assert "Development Status :: 5 - Production/Stable" in project["classifiers"]
+    assert {
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
+        "Programming Language :: Python :: 3.14",
+    } <= set(project["classifiers"])
     assert project["urls"]["Repository"] == "https://github.com/prubianes/sktr"
     assert project["urls"]["Documentation"].endswith("/docs")
     assert project["urls"]["Changelog"].endswith("/CHANGELOG.md")
@@ -331,7 +341,7 @@ def test_release_files_package_schema_and_use_trusted_publishing() -> None:
     assert "include CHANGELOG.md" in manifest
     assert "include CONTRIBUTING.md" in manifest
     assert "include SECURITY.md" in manifest
-    assert 'python-version: ["3.13", "3.14"]' in ci
+    assert 'python-version: ["3.11", "3.12", "3.13", "3.14"]' in ci
     assert "actions/checkout@v6" in ci
     assert "docs/schema/sktr-review-0.1.schema.json" in ci
     assert "twine check dist/*" in ci
@@ -343,9 +353,12 @@ def test_release_files_package_schema_and_use_trusted_publishing() -> None:
     assert "actions/upload-artifact@v4" in release
     assert "actions/download-artifact@v4" in release
     assert "twine check dist/*" in release
+    assert 'python-version: "3.11"' in release
+    assert "uv sync --frozen --python 3.11" in release
+    assert "packages/sktr_core/version.py" in release
 
 
-def test_public_documentation_covers_rc_support_and_operations() -> None:
+def test_public_documentation_covers_stable_support_and_operations() -> None:
     documentation = {
         path.name: path.read_text(encoding="utf-8")
         for path in [
@@ -358,7 +371,7 @@ def test_public_documentation_covers_rc_support_and_operations() -> None:
         ]
     }
 
-    assert "1.0.0rc1" in documentation["CHANGELOG.md"]
+    assert "## 1.0.0 - 2026-07-26" in documentation["CHANGELOG.md"]
     assert "uv run pytest" in documentation["CONTRIBUTING.md"]
     assert "Report a vulnerability" in documentation["SECURITY.md"]
     assert "sktr report" in documentation["cli.md"]
@@ -367,6 +380,21 @@ def test_public_documentation_covers_rc_support_and_operations() -> None:
     assert (ROOT / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml").is_file()
     assert (ROOT / ".github" / "ISSUE_TEMPLATE" / "feature_request.yml").is_file()
     assert (ROOT / ".github" / "pull_request_template.md").is_file()
+
+
+def test_stable_release_surfaces_have_no_v1_prerelease_version() -> None:
+    prerelease = re.compile(r"1\.0\.0r[c]\d+")
+    included_suffixes = {".md", ".py", ".toml", ".yml", ".yaml"}
+    matches: list[str] = []
+    for path in ROOT.rglob("*"):
+        if not path.is_file() or path.suffix not in included_suffixes:
+            continue
+        if any(part in {".git", ".venv", "build", "dist"} for part in path.parts):
+            continue
+        if prerelease.search(path.read_text(encoding="utf-8")):
+            matches.append(str(path.relative_to(ROOT)))
+
+    assert matches == []
 
 
 def test_plugin_load_errors_are_reported_by_doctor_validation() -> None:
@@ -389,7 +417,7 @@ def test_plugin_load_errors_are_reported_by_doctor_validation() -> None:
 def test_builtin_plugin_versions_match_package_version() -> None:
     registry = PluginRegistry.discover()
 
-    assert SKTR_VERSION == "1.0.0rc1"
+    assert SKTR_VERSION == "1.0.0"
     assert {record.metadata.version for record in registry.records} == {SKTR_VERSION}
 
 

@@ -1,1 +1,1 @@
-SKTR_VERSION = "1.0.0rc1"
+SKTR_VERSION = "1.0.0"

@@ -11,7 +11,7 @@ body:
     attributes:
       label: SKTR version
       description: Output from `sktr --version`.
-      placeholder: sktr 1.0.0rc1
+      placeholder: sktr 1.0.0
     validations:
       required: true
   - type: input
@@ -42,4 +42,3 @@ body:
       label: Sanitized output
       description: Remove API keys, private source, usernames, and sensitive paths.
       render: text
-

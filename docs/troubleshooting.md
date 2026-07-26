@@ -81,17 +81,17 @@ uses a supported extension and language version.
 
 ## Installation fails
 
-Confirm that Python 3.13 or newer and Git are available:
+Confirm that Python 3.11 or newer and Git are available:
 
 ```bash
 python --version
 git --version
 ```
 
-For this release candidate, install explicitly with:
+Install or reinstall the stable release explicitly with:
 
 ```bash
-python -m pip install --pre sktr==1.0.0rc1
+python -m pip install --force-reinstall sktr==1.0.0
 ```
 
 Open a public issue with the operating system, Python version, command, and
