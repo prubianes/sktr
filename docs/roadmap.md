@@ -1,4 +1,4 @@
-# SKTR Roadmap Through v0.20
+# SKTR Roadmap Through v1.1
 
 SKTR's path to v1 delivered two bundled language analyzers, froze the automation
 contract, and turned dependency graphing into a useful architecture view. v0.16
@@ -11,6 +11,27 @@ behind the language-agnostic Knowledge Model.
 
 This opening summary is intentionally self-contained so it can be copied into a
 planning conversation without the rest of the repository context.
+
+## v1.1.0: Multilingual Review
+
+Goal: make deterministic reports accessible in maintained languages and let AI
+explanations follow the reviewer's requested language.
+
+- [x] Add complete English and Spanish terminal and Markdown catalogs.
+- [x] Add BCP 47-style language configuration and CLI overrides.
+- [x] Add language selection to interactive and non-interactive initialization.
+- [x] Pass the requested language through the shared OpenAI and Anthropic
+  review context.
+- [x] Preserve canonical JSON keys, rule IDs, severities, paths, scores, and
+  schema `0.1`.
+- [x] Fall back to English deterministic text for languages without a maintained
+  catalog.
+- [x] Fix the PyPI logo with an absolute, release-pinned HTTPS URL.
+
+Acceptance: English and Spanish reports preserve identical findings and scores,
+other requested languages reach AI providers without changing deterministic
+evidence, and the complete package passes release validation on Python 3.11
+through 3.14.
 
 ## v1.0.0: Stable Release
 
@@ -26,8 +47,7 @@ Goal: publish the stable v1 contract after validation with real projects.
   environment.
 - [x] Publish public CLI, troubleshooting, limitations, contribution, security,
   and release-history documentation.
-- [ ] Complete external CI, trusted-publisher, tag, and PyPI verification from
-  the [release checklist](release-checklist.md).
+- [x] Complete external CI, trusted-publisher, tag, and PyPI verification.
 
 Acceptance: the exact `v1.0.0` tag passes CI, publishes through PyPI trusted
 publishing, installs into a clean environment, and produces a schema-valid

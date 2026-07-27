@@ -25,6 +25,7 @@ class ReviewPipeline:
         rules: Sequence[Rule] | None = None,
         ai_provider: AIProvider | None = None,
         run_ai: bool = False,
+        output_language: str = "en",
     ) -> None:
         self.diff = diff
         self.git_provider = git_provider
@@ -33,6 +34,7 @@ class ReviewPipeline:
         self.rules = list(rules or [])
         self.ai_provider = ai_provider
         self.run_ai = run_ai
+        self.output_language = output_language
 
     def run(self) -> ReviewResult:
         diff = self.diff or (self.git_provider.current_diff() if self.git_provider else GitDiff())
@@ -80,8 +82,14 @@ class ReviewPipeline:
         if self.ai_provider is None and self.run_ai:
             messages.append("No AI provider configured yet.")
         elif self.ai_provider is not None and self.run_ai:
-            ai_context = AIReviewContext(review=context, system=system, issues=issues)
+            ai_context = AIReviewContext(
+                review=context,
+                system=system,
+                issues=issues,
+                language=self.output_language,
+            )
             ai_review = self.ai_provider.review(ai_context)
+            ai_review.metadata.setdefault("language", self.output_language)
 
         return ReviewResult(
             status="review complete",
@@ -94,6 +102,7 @@ class ReviewPipeline:
             messages=messages,
             metadata={
                 "generated_at": _generated_at(),
+                "output_language": self.output_language,
                 "rules_executed": rules_executed,
             },
         )

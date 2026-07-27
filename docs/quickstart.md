@@ -5,10 +5,10 @@
 SKTR requires Python 3.11 or newer and Git.
 
 ```bash
-python -m pip install sktr==1.0.0
+python -m pip install sktr==1.1.0
 ```
 
-This installs the stable v1.0.0 release. To accept future compatible upgrades,
+This installs the stable v1.1.0 release. To accept future compatible upgrades,
 use `python -m pip install sktr`.
 
 Confirm the installation and discover the available commands:
@@ -38,10 +38,18 @@ defaults without prompts:
 
 ```bash
 sktr init --yes
+sktr init --yes --language es
 ```
 
 SKTR creates `sktr.yml` and will not overwrite an existing configuration unless
 you pass `--force`.
+
+English and Spanish fully localize human-readable reports. Select the language
+during interactive setup or override it later:
+
+```bash
+sktr review --language es
+```
 
 ## Run the first review
 
@@ -113,6 +121,7 @@ OpenAI:
 export SKTR_OPENAI_API_KEY="your-api-key"
 sktr ai doctor
 sktr review --ai
+sktr review --ai --language es
 sktr review --ai --model gpt-5.6-terra
 ```
 
@@ -127,3 +136,7 @@ sktr review --ai
 
 AI is optional. Without it, analyzers, enrichment, rules, scoring, and all output
 formats continue to work.
+
+Any valid BCP 47 tag can be requested for AI prose, such as `ja` or `pt-BR`.
+For languages other than English and Spanish, deterministic report text remains
+in English.

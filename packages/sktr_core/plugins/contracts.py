@@ -28,6 +28,7 @@ class AIReviewContext(BaseModel):
     review: ReviewContext = Field(default_factory=ReviewContext)
     system: System = Field(default_factory=System)
     issues: list[Issue] = Field(default_factory=list)
+    language: str = "en"
 
 
 class GitProvider(Protocol):

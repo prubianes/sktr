@@ -63,6 +63,17 @@ def test_ai_review_prompt_uses_structured_context_without_raw_diff() -> None:
     assert "forbidden-dependency" in prompt
 
 
+def test_ai_review_prompt_requests_human_text_in_selected_language() -> None:
+    context = _context().model_copy(update={"language": "es"})
+
+    prompt = build_ai_review_prompt(context)
+    payload = structured_review_context(context)
+
+    assert "BCP 47 tag `es`" in prompt
+    assert "Keep JSON keys" in prompt
+    assert payload["requested_language"] == "es"
+
+
 def test_ai_context_aggregates_repeated_findings() -> None:
     context = _context()
     template = context.issues[0]
@@ -111,6 +122,22 @@ def test_pipeline_uses_one_ai_provider_call() -> None:
     assert provider.review_calls == 1
 
 
+def test_pipeline_propagates_language_to_ai_and_artifact_metadata() -> None:
+    provider = _RecordingProvider()
+
+    result = ReviewPipeline(
+        diff=GitDiff(),
+        ai_provider=provider,
+        run_ai=True,
+        output_language="pt-BR",
+    ).run()
+
+    assert provider.contexts[0].language == "pt-BR"
+    assert result.metadata["output_language"] == "pt-BR"
+    assert result.ai_review is not None
+    assert result.ai_review.metadata["language"] == "pt-BR"
+
+
 def test_ai_config_is_unified_and_rejects_removed_feature_flags(tmp_path: Path) -> None:
     config_path = tmp_path / "sktr.yml"
     config_path.write_text(
@@ -149,10 +176,16 @@ def test_ai_config_rejects_inconsistent_enabled_state(tmp_path: Path) -> None:
 
 
 def test_cli_ai_and_no_ai_select_expected_override(monkeypatch) -> None:
-    calls: list[tuple[bool | None, str | None]] = []
+    calls: list[tuple[bool | None, str | None, str | None]] = []
 
     def build(**kwargs) -> ReviewResult:
-        calls.append((kwargs["ai_override"], kwargs["model_override"]))
+        calls.append(
+            (
+                kwargs["ai_override"],
+                kwargs["model_override"],
+                kwargs["language_override"],
+            )
+        )
         return ReviewResult(status="review complete")
 
     monkeypatch.setattr(cli_main, "_build_review_result", build)
@@ -161,11 +194,21 @@ def test_cli_ai_and_no_ai_select_expected_override(monkeypatch) -> None:
         enabled = runner.invoke(cli_main.app, ["review", "--ai"])
         disabled = runner.invoke(cli_main.app, ["review", "--no-ai"])
         selected_model = runner.invoke(cli_main.app, ["review", "--ai", "--model", "gpt-5-mini"])
+        selected_language = runner.invoke(
+            cli_main.app,
+            ["review", "--ai", "--language", "pt-BR"],
+        )
 
     assert enabled.exit_code == 0
     assert disabled.exit_code == 0
     assert selected_model.exit_code == 0
-    assert calls == [(True, None), (False, None), (True, "gpt-5-mini")]
+    assert selected_language.exit_code == 0
+    assert calls == [
+        (True, None, None),
+        (False, None, None),
+        (True, "gpt-5-mini", None),
+        (True, None, "pt-BR"),
+    ]
 
 
 def test_outputs_and_artifact_use_single_ai_review() -> None:
@@ -231,9 +274,11 @@ class _FakeClient:
 class _RecordingProvider:
     def __init__(self) -> None:
         self.review_calls = 0
+        self.contexts: list[AIReviewContext] = []
 
     def review(self, context: AIReviewContext) -> AIReview:
         self.review_calls += 1
+        self.contexts.append(context)
         return _ai_review()
 
 

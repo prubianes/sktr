@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/sktr-logo.png" alt="SKTR - System Knowledge & Technical Review" width="420">
+  <img src="https://raw.githubusercontent.com/prubianes/sktr/v1.1.0/assets/sktr-logo.png" alt="SKTR - System Knowledge & Technical Review" width="420">
 </p>
 
 # SKTR
@@ -8,9 +8,9 @@
 
 Understand your software before you change it.
 
-> **Stable release:** `1.0.0` is the first stable SKTR interface and artifact
-> contract. Please report reproducible feedback through the
-> [issue tracker](https://github.com/prubianes/sktr/issues).
+> **Stable release:** `1.1.0` adds multilingual human output while preserving
+> the stable SKTR interface and artifact contract. Please report reproducible
+> feedback through the [issue tracker](https://github.com/prubianes/sktr/issues).
 
 SKTR is a language-agnostic software intelligence CLI. It turns Git changes into
 a structured knowledge model, enriches that model with deterministic engineering
@@ -60,7 +60,7 @@ result as a versioned JSON artifact rather than only printing prose.
 SKTR requires Python 3.11 or newer and a Git repository:
 
 ```bash
-python -m pip install sktr==1.0.0
+python -m pip install sktr==1.1.0
 sktr --version
 sktr --help
 cd your-project
@@ -114,6 +114,22 @@ order behavior in one large function.
 AI output appears only when enabled. Deterministic findings and scoring are the
 same with or without AI.
 
+## Output languages
+
+English (`en`) and Spanish (`es`) have complete deterministic report catalogs.
+Choose a default during `sktr init`, set `output.language` in `sktr.yml`, or
+override one run:
+
+```bash
+sktr review --language es
+sktr review --ai --language pt-BR
+```
+
+Other valid BCP 47 language tags keep deterministic terminal and Markdown text
+in English while requesting AI explanations in that language. JSON keys, schema
+fields, rule IDs, severities, paths, and code identifiers always remain
+canonical and are not translated.
+
 ## Configuration
 
 `sktr init` creates `sktr.yml`. Use interactive setup to choose plugins, rules,
@@ -132,6 +148,8 @@ review:
     - dist/
     - build/
     - target/
+output:
+  language: en
 plugins:
   analyzers:
     - sktr-python
@@ -231,9 +249,9 @@ See the [plugin guide](docs/plugins.md) to build or distribute a plugin.
 
 ## Roadmap
 
-SKTR 1.0 packages the deterministic review, three bundled analyzers, stable JSON
-artifact, architecture graphing, CI gates, and optional AI Review developed
-through v0.20. Post-v1 work remains tracked in the canonical roadmap.
+SKTR 1.1 packages deterministic review, three bundled analyzers, a stable JSON
+artifact, architecture graphing, CI gates, optional AI Review, and multilingual
+human output. Future work remains tracked in the canonical roadmap.
 
 The v0.16-v0.18 roadmap delivered bundled JavaScript/TypeScript and Java
 analyzers, followed by CI severity gates, exclusions, parse diagnostics, and a
@@ -256,7 +274,7 @@ uv run sktr review
 Read [CONTRIBUTING.md](CONTRIBUTING.md) and
 [development.md](docs/development.md) before adding an analyzer, rule, output,
 or provider. Release work is tracked in the
-[v1.0.0 checklist](docs/release-checklist.md).
+[v1.1.0 checklist](docs/release-checklist.md).
 
 For help, see [troubleshooting](docs/troubleshooting.md) and the
 [known limitations](docs/limitations.md). Report sensitive vulnerabilities

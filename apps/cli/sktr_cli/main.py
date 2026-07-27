@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from rich.console import Console
 
 from sktr_core.config import SKTRConfig, load_config
+from sktr_core.localization import normalize_language_tag
 from sktr_core.model import IssueSeverity, ReviewResult
 from sktr_core.pipeline import ReviewPipeline, filter_git_diff
 from sktr_core.plugins import MissingPluginError, PluginRegistry
@@ -67,6 +68,11 @@ def init(
         help="Setup preset: recommended, minimal, or custom.",
     ),
     enable_ai: bool = typer.Option(False, "--ai", help="Enable AI features in the generated config."),
+    language: str | None = typer.Option(
+        None,
+        "--language",
+        help="Review output language as a BCP 47 tag, such as en, es, or pt-BR.",
+    ),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview configuration without writing sktr.yml."),
 ) -> None:
     """Initialize SKTR configuration in the current project."""
@@ -80,6 +86,7 @@ def init(
     _print_init_header()
     detection = detect_project()
     registry = PluginRegistry.discover()
+    selected_language = _validated_language(language, param_hint="--language") if language else None
     print_detection(detection)
     if yes:
         answers = default_answers(
@@ -87,6 +94,7 @@ def init(
             registry,
             preset=preset or InitPreset.RECOMMENDED,
             enable_ai=enable_ai,
+            language=selected_language or "en",
         )
     else:
         prompter = interactive_prompter()
@@ -97,6 +105,7 @@ def init(
                 prompter,
                 preset_override=preset,
                 enable_ai=enable_ai,
+                language_override=selected_language,
             )
             print_preview(answers)
             if prompter.confirm("Create sktr.yml with this configuration?", default=True):
@@ -166,6 +175,11 @@ def review(
         "--model",
         help="Override the configured AI model for this review.",
     ),
+    language: str | None = typer.Option(
+        None,
+        "--language",
+        help="Override the review language with a BCP 47 tag.",
+    ),
     fail_on: IssueSeverity | None = typer.Option(
         None,
         "--fail-on",
@@ -185,6 +199,7 @@ def review(
             registry=registry,
             ai_override=ai,
             model_override=model,
+            language_override=language,
             config_path=config_file,
         )
     try:
@@ -207,15 +222,24 @@ def report(
         "--format",
         help="Output format: terminal, json, or markdown.",
     ),
+    language: str | None = typer.Option(
+        None,
+        "--language",
+        help="Override the human-readable report language with a BCP 47 tag.",
+    ),
 ) -> None:
     """Render an existing review artifact without rerunning Git, rules, or AI."""
-    _require_config(config_file)
+    config = _require_config(config_file)
     try:
         payload = json.loads(artifact.read_text(encoding="utf-8"))
         result_payload = payload.get("review_result", payload)
         result = ReviewResult.model_validate(result_payload)
     except (OSError, json.JSONDecodeError, ValidationError, AttributeError) as error:
         raise typer.BadParameter(f"Invalid SKTR review artifact: {error}", param_hint="artifact") from error
+    result.metadata["output_language"] = _validated_language(
+        language or config.output.language,
+        param_hint="--language",
+    )
 
     registry = PluginRegistry.discover()
     try:
@@ -498,9 +522,14 @@ def _build_review_result(
     registry: PluginRegistry | None = None,
     ai_override: bool | None = None,
     model_override: str | None = None,
+    language_override: str | None = None,
     config_path: Path | None = None,
 ) -> ReviewResult:
     config = _require_config(config_path)
+    output_language = _validated_language(
+        language_override or config.output.language,
+        param_hint="--language",
+    )
     plugin_registry = registry or PluginRegistry.discover()
     if not config.plugins.analyzers:
         _fail(
@@ -558,6 +587,7 @@ def _build_review_result(
         rules=rules,
         ai_provider=ai_provider,
         run_ai=run_ai,
+        output_language=output_language,
     )
     return pipeline.run()
 
@@ -644,6 +674,13 @@ def _configured_fail_on(config: SKTRConfig) -> IssueSeverity | None:
     return config.review.fail_on
 
 
+def _validated_language(value: str, *, param_hint: str) -> str:
+    try:
+        return normalize_language_tag(value)
+    except ValueError as error:
+        raise typer.BadParameter(str(error), param_hint=param_hint) from error
+
+
 def _meets_failure_threshold(result: ReviewResult, threshold: IssueSeverity) -> bool:
     order = {
         IssueSeverity.INFO: 0,
@@ -704,6 +741,7 @@ def _print_init_success(config_path: Path, *, answers: InitAnswers) -> None:
     typer.echo(f"  analyzers: {', '.join(answers.analyzers) or 'none'}")
     typer.echo(f"  rules:     {', '.join(answers.rules) or 'none'}")
     typer.echo(f"  outputs:   {', '.join(answers.outputs) or 'none'}")
+    typer.echo(f"  language:  {answers.output_language}")
     ai_label = (
         f"{answers.ai_provider} ({answers.ai_model})"
         if answers.ai_enabled

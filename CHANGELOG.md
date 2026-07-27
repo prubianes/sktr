@@ -4,6 +4,20 @@ All notable changes to SKTR are documented here. Versions follow
 [Semantic Versioning](https://semver.org/) and Python package versions follow
 [PEP 440](https://peps.python.org/pep-0440/).
 
+## 1.1.0 - 2026-07-26
+
+### Added
+
+- English and Spanish deterministic terminal and Markdown report catalogs.
+- BCP 47 output-language configuration and `--language` overrides for `init`,
+  `review`, and `report`.
+- AI overview and recommendation language selection for any valid language tag,
+  while preserving canonical machine-readable identifiers.
+
+### Fixed
+
+- PyPI now renders the project logo from an absolute, release-pinned HTTPS URL.
+
 ## 1.0.0 - 2026-07-26
 
 ### Added

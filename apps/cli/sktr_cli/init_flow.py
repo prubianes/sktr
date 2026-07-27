@@ -22,6 +22,7 @@ from sktr_ai import (
     resolve_openai_api_key,
 )
 from sktr_core.config import DEFAULT_ENABLED_RULES, DEFAULT_EXCLUDES
+from sktr_core.localization import DEFAULT_LANGUAGE, normalize_language_tag
 from sktr_core.plugins import PluginRegistry
 
 DEFAULT_OUTPUTS = ["terminal", "markdown", "json", "mermaid"]
@@ -61,6 +62,7 @@ class InitAnswers:
     rules: list[str]
     enabled_rules: list[str]
     outputs: list[str]
+    output_language: str = DEFAULT_LANGUAGE
     ai_enabled: bool = False
     ai_provider: str | None = None
     ai_model: str | None = None
@@ -164,6 +166,7 @@ def default_answers(
     *,
     preset: InitPreset = InitPreset.RECOMMENDED,
     enable_ai: bool = False,
+    language: str = DEFAULT_LANGUAGE,
 ) -> InitAnswers:
     analyzers = [record.metadata.name for record in registry.by_type("analyzer")]
     rules = [record.metadata.name for record in registry.by_type("rules")]
@@ -183,6 +186,7 @@ def default_answers(
         rules=rules,
         enabled_rules=enabled_rules,
         outputs=outputs,
+        output_language=normalize_language_tag(language),
         ai_enabled=bool(provider),
         ai_provider=provider,
         ai_model=_default_ai_model(provider),
@@ -196,6 +200,7 @@ def prompt_for_answers(
     *,
     preset_override: InitPreset | None = None,
     enable_ai: bool = False,
+    language_override: str | None = None,
 ) -> InitAnswers:
     preset = preset_override or prompter.select(
         "Choose a setup",
@@ -206,12 +211,38 @@ def prompt_for_answers(
         ],
         InitPreset.RECOMMENDED,
     )
-    answers = default_answers(detection, registry, preset=preset, enable_ai=enable_ai)
+    answers = default_answers(
+        detection,
+        registry,
+        preset=preset,
+        enable_ai=enable_ai,
+        language=language_override or DEFAULT_LANGUAGE,
+    )
     if preset == InitPreset.CUSTOM:
         answers = _custom_answers(answers, registry, prompter, enable_ai=enable_ai)
     elif preset == InitPreset.RECOMMENDED and not enable_ai:
         answers = _with_ai(answers, registry, prompter)
+    if language_override is None:
+        answers = _with_output_language(answers, prompter)
     return answers
+
+
+def _with_output_language(answers: InitAnswers, prompter: InitPrompter) -> InitAnswers:
+    custom = "__custom__"
+    language = prompter.select(
+        "Review output language",
+        [
+            ("English", "en"),
+            ("Español", "es"),
+            ("Other - AI prose only", custom),
+        ],
+        answers.output_language,
+    )
+    if language == custom:
+        language = prompter.text("BCP 47 language tag", "pt-BR")
+    return InitAnswers(
+        **{**answers.__dict__, "output_language": normalize_language_tag(language)}
+    )
 
 
 def _custom_answers(
@@ -299,6 +330,8 @@ review:
   default_scope: working_tree
   fail_on: null
   exclude:{_yaml_list(DEFAULT_EXCLUDES)}
+output:
+  language: {answers.output_language}
 plugins:
   analyzers:{_yaml_list(answers.analyzers)}
   rules:{_yaml_list(answers.rules)}
@@ -328,6 +361,7 @@ def print_preview(answers: InitAnswers) -> None:
     typer.echo(f"  Rule packs:{' ' if answers.rules else ''}{', '.join(answers.rules) or 'none'}")
     typer.echo(f"  Rules:     {len(answers.enabled_rules)} enabled")
     typer.echo(f"  Outputs:   {', '.join(answers.outputs) or 'none'}")
+    typer.echo(f"  Language:  {answers.output_language}")
     ai = f"{answers.ai_provider} ({answers.ai_model})" if answers.ai_enabled else "disabled"
     typer.echo(f"  AI Review: {ai}")
     if answers.ai_enabled and answers.ai_provider == "openai":

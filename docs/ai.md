@@ -98,6 +98,22 @@ Disable configured AI features for one review:
 sktr review --no-ai
 ```
 
+## Response language
+
+The configured `output.language` is passed to the AI provider as a BCP 47
+language tag. Override it for one review:
+
+```bash
+sktr review --ai --language es
+sktr review --ai --language ja
+```
+
+The provider is instructed to write all human-readable JSON values in the
+requested language while preserving JSON keys, issue and rule IDs, paths,
+module names, severity values, and code identifiers. English and Spanish also
+localize SKTR's deterministic report text. Other languages receive English
+deterministic text plus AI prose in the requested language.
+
 ## Diagnostics
 
 ```bash

@@ -69,7 +69,7 @@ def test_init_yes_does_not_prompt() -> None:
 
 def test_init_recommended_defaults_prompt() -> None:
     with _isolated(Path.cwd() / ".tmp-init-test-5"):
-        result = runner.invoke(app, ["init"], input="\n\n\n")
+        result = runner.invoke(app, ["init"], input="\n\n\n\n")
 
         assert result.exit_code == 0
         assert "Choose a setup" in result.output
@@ -95,9 +95,10 @@ def test_init_customize_settings() -> None:
                     "n",
                     "y",
                     "",
-                    "__custom__",
-                    "gpt-5-mini",
-                    "y",
+                        "__custom__",
+                        "gpt-5-mini",
+                        "",
+                        "y",
                 ]
             )
             + "\n",
@@ -118,7 +119,7 @@ def test_init_customize_settings() -> None:
 
 def test_init_can_leave_ai_disabled_interactively() -> None:
     with _isolated(Path.cwd() / ".tmp-init-test-7"):
-        result = runner.invoke(app, ["init"], input="\n\n\n")
+        result = runner.invoke(app, ["init"], input="\n\n\n\n")
 
         assert result.exit_code == 0
         config = Path("sktr.yml").read_text(encoding="utf-8")
@@ -160,6 +161,42 @@ def test_init_yes_can_enable_detected_ai_provider_without_prompts(monkeypatch) -
         assert "provider: openai" in config
         assert "model: gpt-5.6-terra" in config
         assert "not-printed" not in result.output
+
+
+def test_init_yes_writes_requested_output_language() -> None:
+    with _isolated(Path.cwd() / ".tmp-init-language-test"):
+        result = runner.invoke(app, ["init", "--yes", "--language", "es"])
+
+        assert result.exit_code == 0
+        config = Path("sktr.yml").read_text(encoding="utf-8")
+        assert "output:\n  language: es\n" in config
+        assert "language:  es" in result.output
+
+
+def test_interactive_init_can_select_spanish() -> None:
+    class Prompter:
+        def confirm(self, message: str, default: bool = True) -> bool:
+            return False
+
+        def select(self, message, choices, default):
+            if message == "Review output language":
+                return "es"
+            return default
+
+        def checkbox(self, message, choices, defaults):
+            return defaults
+
+        def text(self, message: str, default: str) -> str:
+            return default
+
+    answers = prompt_for_answers(
+        ProjectDetection(name="app", default_base="main", languages=["Python"], repository="Git"),
+        PluginRegistry.discover(),
+        Prompter(),
+        preset_override=InitPreset.RECOMMENDED,
+    )
+
+    assert answers.output_language == "es"
 
 
 def test_init_openai_model_profiles_include_fast_balanced_quality_and_custom() -> None:

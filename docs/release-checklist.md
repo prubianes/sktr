@@ -1,74 +1,68 @@
-# SKTR v1.0.0 Release Checklist
+# SKTR v1.1.0 Release Checklist
 
-Implementation milestones are tracked in the [v0.16-v0.20 roadmap](roadmap.md).
+Multilingual output changes are documented in the
+[v1.1.0 changelog](../CHANGELOG.md).
 
 ## Functionality
 
-- [x] `sktr init --yes` works
-- [x] `sktr review` works without AI
-- [x] `sktr review --ai` works with OpenAI configured (live credential verified by project owner)
-- [x] Anthropic Claude provider, model selection, and credential diagnostics work
-- [x] `sktr graph` works
-- [x] Repository and change graph scopes pass the v0.19 acceptance checks
-- [x] Focused, cycle, dependency, and dependent graph views work
-- [x] Markdown output works
-- [x] JSON output works
-- [x] Config loading works
-- [x] Plugin discovery works
-- [x] `sktr plugins doctor` works
-- [x] `sktr ai doctor` works
+- [x] English deterministic terminal and Markdown reports work
+- [x] Spanish deterministic terminal and Markdown reports work
+- [x] `sktr init` prompts for the output language
+- [x] `sktr init --yes --language es` writes the language configuration
+- [x] `sktr review --language` overrides the configured language
+- [x] `sktr report --language` localizes deterministic artifact rendering
+- [x] OpenAI and Anthropic receive the requested AI prose language
+- [x] Unsupported deterministic catalog languages fall back to English
+- [x] JSON keys, rule IDs, severities, paths, and schema values remain canonical
+- [x] Existing configurations default to English
 
 ## Quality
 
-- [x] Tests pass (`204 passed` locally; CI verifies Python 3.11 through 3.14)
-- [x] Type checks pass, if configured (no type checker configured)
-- [x] Lint passes, if configured (no linter configured)
-- [x] No API keys in examples
-- [x] No secrets in logs
-- [x] Helpful errors for missing config
-- [x] Helpful errors for missing plugins
-- [x] Helpful warning for missing API key
+- [x] Full test suite passes (`213 passed` locally)
+- [x] English output snapshots remain compatible
+- [x] Spanish init and Markdown review smoke tests pass
+- [x] BCP 47-style language validation and normalization are tested
+- [x] AI language propagation is tested
+- [x] Frozen JSON artifact schema `0.1` still validates
+- [x] No API keys are stored in config, artifacts, examples, or logs
 
 ## Documentation
 
-- [x] README updated
-- [x] Quickstart complete
-- [x] Configuration docs complete
-- [x] Plugin docs complete
-- [x] AI docs complete
-- [x] Output docs complete
-- [x] CLI reference complete
-- [x] Troubleshooting and known limitations documented
-- [x] Changelog, contribution guide, and security policy added
+- [x] README and quickstart describe multilingual output
+- [x] Configuration reference documents `output.language`
+- [x] CLI reference documents all `--language` options
+- [x] AI documentation explains arbitrary-language prose
+- [x] Output documentation explains deterministic fallback behavior
+- [x] Known limitations describe maintained output catalogs
+- [x] Changelog and GitHub release notes are complete
+- [x] PyPI logo uses a valid absolute HTTPS URL
 
 ## Packaging
 
-- [x] Package metadata reviewed
-- [x] CLI entry point works
-- [x] Version updated (`1.0.0`)
-- [x] License included
+- [x] Package and built-in plugin version updated to `1.1.0`
+- [x] Python 3.11 through 3.14 remain supported
 - [x] Wheel and source distribution build successfully
-- [x] Built wheel installs in clean Python 3.11 through 3.14 environments
-- [x] PyPI publishing process documented
-- [x] CI and trusted-publishing workflows added
-- [x] Frozen JSON Schema included in the source distribution manifest
+- [x] Both distributions pass `twine check`
+- [x] Built wheel installs and reports `sktr 1.1.0`
+- [x] Source distribution contains the frozen JSON Schema
+- [x] `dist/` contains only the v1.1.0 wheel and source distribution
 
 ## Release authorization
 
 - [ ] Release commit passes GitHub Actions on Python 3.11 through 3.14
-- [ ] Protected `pypi` GitHub environment and PyPI trusted publisher verified
-- [ ] GitHub private vulnerability reporting enabled for the repository
-- [ ] `v1.0.0` tag created from the approved release commit
-- [ ] PyPI package, description, links, and console entry point verified
+- [ ] Protected `pypi` GitHub environment and trusted publisher are verified
+- [ ] GitHub private vulnerability reporting is enabled
+- [ ] `v1.1.0` tag is created from the approved release commit
+- [ ] PyPI description, logo, links, installation, and console entry point are verified
 
 ## Publish process
 
 1. Complete this checklist on the final release commit.
-2. Build with `uv build` and inspect `dist/`.
+2. Clean `dist/`, build with `uv build`, and run `twine check`.
 3. Install the wheel in a clean environment and run CLI smoke tests.
-4. Tag the approved commit with the release version.
-5. Push the matching version tag to publish through the trusted PyPI workflow.
-6. Verify the PyPI description, installation command, and console entry point.
+4. Push the release commit and wait for the complete CI matrix.
+5. Create and push the annotated `v1.1.0` tag.
+6. Verify PyPI metadata, the rendered logo, installation, and `sktr --version`.
 
 Do not publish from an uncommitted working tree or embed a PyPI token in project
 files, shell history, or CI logs.

@@ -14,6 +14,10 @@ Explain and prioritize deterministic SKTR findings. Do not invent files, modules
 dependencies, issues, or source behavior. Recommend only actions supported by the
 provided structured context. Keep the overview concise and actions practical.
 
+Write every human-readable value in the requested language identified by the
+BCP 47 tag `{context.language}`. Keep JSON keys, issue IDs, file paths, module
+names, rule IDs, severity values, and code identifiers unchanged.
+
 Return JSON only with this shape:
 {{"overview":"...","recommendations":[{{"title":"...","why":"...","suggested_action":"...","related_issue_ids":[],"related_files":[],"confidence":"medium"}}]}}
 
@@ -59,6 +63,7 @@ def structured_review_context(context: AIReviewContext) -> dict[str, Any]:
             "issues_total": len(context.issues),
             "priority_issues_included": len(_priority_issues(context)),
         },
+        "requested_language": context.language,
     }
 
 

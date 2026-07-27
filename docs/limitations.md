@@ -1,6 +1,6 @@
 # Known Limitations
 
-SKTR 1.0.0 intentionally favors deterministic, reviewable evidence over broad
+SKTR 1.1.0 intentionally favors deterministic, reviewable evidence over broad
 heuristic coverage.
 
 - Working-tree reviews include tracked staged and unstaged changes. Untracked
@@ -18,8 +18,11 @@ heuristic coverage.
   signals, not proof of a defect.
 - AI receives structured review context and explains existing evidence. It does
   not detect findings, change scores, or affect severity-gate exits.
+- Deterministic human-readable catalogs are maintained for English and Spanish.
+  Other requested languages use English deterministic text and can use the
+  requested language for AI prose.
 - GitHub review integration, impact and explain commands, dashboards, editor
-  integrations, and automatic code changes are deferred until after v1.
+  integrations, and automatic code changes remain deferred.
 
 Report reproducible false positives or missing deterministic evidence through
 the [issue tracker](https://github.com/prubianes/sktr/issues).
