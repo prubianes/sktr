@@ -83,12 +83,12 @@ PyPI project once with this trusted publisher:
 Create a protected GitHub environment named `pypi` and require an approval for
 deployment. No PyPI token belongs in GitHub secrets or repository files.
 
-For v1, merge a clean release commit whose package version is `1.0.0`, wait for
-CI to pass, and then create and push the matching tag:
+For v1.1.0, merge a clean release commit whose package version is `1.1.0`, wait
+for CI to pass, and then create and push the matching tag:
 
 ```bash
-git tag -a v1.0.0 -m "SKTR v1.0.0"
-git push origin v1.0.0
+git tag -a v1.1.0 -m "SKTR v1.1.0"
+git push origin v1.1.0
 ```
 
 The release workflow rejects a tag that does not exactly match the package

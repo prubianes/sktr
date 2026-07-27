@@ -53,7 +53,7 @@ def test_cli_reports_version() -> None:
     result = runner.invoke(cli_main.app, ["--version"])
 
     assert result.exit_code == 0
-    assert result.output.strip() == "sktr 1.0.0"
+    assert result.output.strip() == "sktr 1.1.0"
 
 
 def test_review_accepts_explicit_config_path(tmp_path: Path, monkeypatch) -> None:
@@ -264,10 +264,10 @@ def test_public_docs_include_release_commands_and_current_ai_field() -> None:
 
     assert (
         'src="https://raw.githubusercontent.com/prubianes/sktr/'
-        'v1.0.0/assets/sktr-logo.png"'
+        'v1.1.0/assets/sktr-logo.png"'
     ) in readme
     for command in [
-        "python -m pip install sktr==1.0.0",
+        "python -m pip install sktr==1.1.0",
         "sktr init --yes",
         "sktr review --ai",
         "sktr review --format markdown --output REVIEW.md",
@@ -375,19 +375,24 @@ def test_public_documentation_covers_stable_support_and_operations() -> None:
         ]
     }
 
+    assert "## 1.1.0 - 2026-07-26" in documentation["CHANGELOG.md"]
     assert "## 1.0.0 - 2026-07-26" in documentation["CHANGELOG.md"]
     assert "uv run pytest" in documentation["CONTRIBUTING.md"]
     assert "Report a vulnerability" in documentation["SECURITY.md"]
     assert "sktr report" in documentation["cli.md"]
     assert "A new file is missing" in documentation["troubleshooting.md"]
     assert "Untracked" in documentation["limitations.md"]
+    assert "# SKTR v1.1.0" in (ROOT / "RELEASE_NOTES.md").read_text(encoding="utf-8")
+    assert "# SKTR v1.1.0 Release Checklist" in (
+        ROOT / "docs" / "release-checklist.md"
+    ).read_text(encoding="utf-8")
     assert (ROOT / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml").is_file()
     assert (ROOT / ".github" / "ISSUE_TEMPLATE" / "feature_request.yml").is_file()
     assert (ROOT / ".github" / "pull_request_template.md").is_file()
 
 
 def test_stable_release_surfaces_have_no_v1_prerelease_version() -> None:
-    prerelease = re.compile(r"1\.0\.0r[c]\d+")
+    prerelease = re.compile(r"1\.\d+\.\d+r[c]\d+")
     included_suffixes = {".md", ".py", ".toml", ".yml", ".yaml"}
     matches: list[str] = []
     for path in ROOT.rglob("*"):
@@ -421,7 +426,7 @@ def test_plugin_load_errors_are_reported_by_doctor_validation() -> None:
 def test_builtin_plugin_versions_match_package_version() -> None:
     registry = PluginRegistry.discover()
 
-    assert SKTR_VERSION == "1.0.0"
+    assert SKTR_VERSION == "1.1.0"
     assert {record.metadata.version for record in registry.records} == {SKTR_VERSION}
 
 

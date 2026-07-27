@@ -5,10 +5,10 @@
 SKTR requires Python 3.11 or newer and Git.
 
 ```bash
-python -m pip install sktr==1.0.0
+python -m pip install sktr==1.1.0
 ```
 
-This installs the stable v1.0.0 release. To accept future compatible upgrades,
+This installs the stable v1.1.0 release. To accept future compatible upgrades,
 use `python -m pip install sktr`.
 
 Confirm the installation and discover the available commands:

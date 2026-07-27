@@ -91,7 +91,7 @@ git --version
 Install or reinstall the stable release explicitly with:
 
 ```bash
-python -m pip install --force-reinstall sktr==1.0.0
+python -m pip install --force-reinstall sktr==1.1.0
 ```
 
 Open a public issue with the operating system, Python version, command, and

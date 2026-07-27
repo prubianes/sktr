@@ -67,7 +67,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install SKTR
-        run: python -m pip install sktr==1.0.0
+        run: python -m pip install sktr==1.1.0
       - name: Review pull request
         run: >-
           sktr review --branch --base origin/${{ github.event.pull_request.base.ref }}
